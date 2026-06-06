@@ -25,6 +25,43 @@ const MODULE_COLORS = {
   'Invoices': 'bg-pink-50 text-pink-700'
 };
 
+const getActionMeta = (action) => {
+  const act = action.toUpperCase();
+  if (act.includes('APPROVE') || act.includes('REJECT') || act.includes('DECISION') || act.includes('SELECT') || act.includes('WIN')) {
+    return {
+      dot: 'border-purple-500 text-purple-500 bg-purple-500',
+      badge: 'bg-purple-50 text-purple-700 border-purple-100',
+      text: 'text-purple-600'
+    };
+  }
+  if (act.includes('CREATE') || act.includes('SUBMIT') || act.includes('REGISTER') || act.includes('GENERATE') || act.includes('ADD') || act.includes('NEW')) {
+    return {
+      dot: 'border-emerald-500 text-emerald-500 bg-emerald-500',
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      text: 'text-emerald-600'
+    };
+  }
+  if (act.includes('UPDATE') || act.includes('EDIT') || act.includes('MODIFY') || act.includes('STATUS') || act.includes('SEND') || act.includes('MAIL') || act.includes('CHANGE')) {
+    return {
+      dot: 'border-blue-500 text-blue-500 bg-blue-500',
+      badge: 'bg-blue-50 text-blue-700 border-blue-100',
+      text: 'text-blue-600'
+    };
+  }
+  if (act.includes('DELETE') || act.includes('REMOVE') || act.includes('CLOSE') || act.includes('CANCEL') || act.includes('DEACTIVATE')) {
+    return {
+      dot: 'border-rose-500 text-rose-500 bg-rose-500',
+      badge: 'bg-rose-50 text-rose-700 border-rose-100',
+      text: 'text-rose-600'
+    };
+  }
+  return {
+    dot: 'border-slate-500 text-slate-500 bg-slate-500',
+    badge: 'bg-slate-50 text-slate-700 border-slate-100',
+    text: 'text-slate-600'
+  };
+};
+
 const formatTime = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
@@ -262,12 +299,14 @@ const ActivityLogs = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-600 font-semibold">
-                {logs.map((log) => (
-                  <tr 
-                    key={log.id} 
-                    onClick={() => navigate(`/activity-logs/${log.id}`)}
-                    className="hover:bg-slate-50/50 transition cursor-pointer group"
-                  >
+                {logs.map((log) => {
+                  const actionMeta = getActionMeta(log.action);
+                  return (
+                    <tr 
+                      key={log.id} 
+                      onClick={() => navigate(`/activity-logs/${log.id}`)}
+                      className="hover:bg-slate-50/50 transition cursor-pointer group"
+                    >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-xs text-slate-900 font-black">{formatDate(log.created_at)}</div>
                       <div className="text-[10px] text-slate-400 font-bold mt-0.5">{formatTime(log.created_at)}</div>
@@ -291,8 +330,10 @@ const ActivityLogs = () => {
                         {log.module}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-indigo-600 font-bold uppercase">
-                      {log.action}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide font-mono ${actionMeta.badge}`}>
+                        {log.action}
+                      </span>
                     </td>
                     <td className="px-6 py-4 max-w-xs truncate text-xs text-slate-500">
                       {log.description}
@@ -301,7 +342,7 @@ const ActivityLogs = () => {
                       <ChevronRight size={16} className="text-slate-400 group-hover:text-indigo-600 transition" />
                     </td>
                   </tr>
-                ))}
+                ); })}
               </tbody>
             </table>
           </div>
@@ -337,41 +378,53 @@ const ActivityLogs = () => {
           <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-slate-200" />
           
           <div className="space-y-6">
-            {logs.map((log) => (
-              <div key={log.id} className="relative pl-14 group">
-                {/* Visual Connector Dot */}
-                <div className="absolute left-[19px] top-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white border-2 border-indigo-500 shadow-sm transition group-hover:scale-125 z-10" />
+            {logs.map((log) => {
+              const actionMeta = getActionMeta(log.action);
+              return (
+                <div key={log.id} className="relative pl-14 group">
+                  {/* Visual Connector Dot */}
+                  <div className={`absolute left-[19px] top-3 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white border-2 ${actionMeta.dot.split(' ')[0]} shadow-sm transition group-hover:scale-125 z-10`} />
 
-                {/* Timeline Card */}
-                <div 
-                  onClick={() => navigate(`/activity-logs/${log.id}`)}
-                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[#6D5DFC] hover:shadow-md cursor-pointer"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-slate-950">{formatDate(log.created_at)}</span>
-                      <span className="text-[10px] text-slate-400 font-bold">· {formatTime(log.created_at)}</span>
+                  {/* Timeline Card */}
+                  <div 
+                    onClick={() => navigate(`/activity-logs/${log.id}`)}
+                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-[#6D5DFC] hover:shadow-md cursor-pointer"
+                  >
+                    <div className="flex flex-col gap-3">
+                      {/* User Action (Color-coded badge) */}
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <span className={`inline-flex rounded-xl border px-3 py-1 text-xs font-black uppercase tracking-wide font-mono ${actionMeta.badge}`}>
+                          {log.action.replace(/_/g, ' ')}
+                        </span>
+                        
+                        <span className={`inline-flex rounded-xl px-2.5 py-0.5 text-[10px] font-bold ${MODULE_COLORS[log.module] || 'bg-slate-100 text-slate-700'}`}>
+                          {log.module}
+                        </span>
+                      </div>
+
+                      {/* Timestamp */}
+                      <div className="text-xs text-slate-400 font-bold flex items-center gap-1.5">
+                        <span>{formatDate(log.created_at)}</span>
+                        <span>at</span>
+                        <span>{formatTime(log.created_at)}</span>
+                      </div>
+
+                      {/* Description */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-slate-700 leading-relaxed">{log.description}</p>
+                          <p className="text-xs text-slate-400">
+                            Performed by: <strong className="text-slate-700">{log.user_name || 'System'}</strong> 
+                            {log.role && ` (${log.role})`}
+                          </p>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-400 group-hover:text-[#6D5DFC] transition shrink-0" />
+                      </div>
                     </div>
-
-                    <span className={`inline-flex rounded-xl px-2.5 py-0.5 text-[10px] font-bold ${MODULE_COLORS[log.module] || 'bg-slate-100 text-slate-700'}`}>
-                      {log.module}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold font-mono text-indigo-600 uppercase">{log.action.replace(/_/g, ' ')}</h4>
-                      <p className="mt-1 text-sm font-semibold text-slate-700">{log.description}</p>
-                      <p className="mt-2 text-xs text-slate-400">
-                        Performed by: <strong className="text-slate-700">{log.user_name || 'System'}</strong> 
-                        {log.role && ` (${log.role})`}
-                      </p>
-                    </div>
-                    <ChevronRight size={18} className="text-slate-400 group-hover:text-indigo-600 transition shrink-0" />
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
