@@ -1,0 +1,15 @@
+{
+  "name": "vendorbridge-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "client": "cd vendorbridge-client && npm run dev",
+    "server": "cd backend && npm start",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install:all": "npm install && cd backend && npm install && cd ../vendorbridge-client && npm install",
+    "seed": "cd backend && node database/seed.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
