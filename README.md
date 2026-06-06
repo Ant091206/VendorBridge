@@ -200,6 +200,6 @@ Developed for the Odoo Hackathon as a practical procurement and vendor managemen
 
 ---
 
-License
+
 
 This project is licensed under the MIT License.
