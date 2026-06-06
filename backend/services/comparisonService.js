@@ -1,5 +1,5 @@
 import db from '../config/db.js';
-import { logActivity } from '../utils/activityLogger.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 import { sendEmail } from './emailService.js';
 
 export const getRFQComparisonData = async (rfqId, user) => {
@@ -171,11 +171,36 @@ export const selectWinningVendor = async (rfqId, payload, user) => {
       INSERT INTO approvals (quotation_id, approver_id, decision, remarks, decided_at)
       VALUES (?, ?, 'pending', ?, NULL)
     `;
-    await conn.execute(approvalSql, [selected_quotation_id, user.id, selection_reason]);
+    const [apprResult] = await conn.execute(approvalSql, [selected_quotation_id, user.id, selection_reason]);
+    const approvalId = apprResult.insertId;
 
-    // F. Log activity audits
-    await logActivity(conn, user.id, 'quotation', selected_quotation_id, 'QUOTATION_SELECTED');
-    await logActivity(conn, user.id, 'rfq', rfqId, 'RFQ_CLOSED_SELECTION');
+    // F. Log activity audits & Dispatch Notifications
+    await logAndNotify(user.id, {
+      action: 'APPROVAL_REQUESTED',
+      module: 'Approval Workflow',
+      entityType: 'approval',
+      entityId: approvalId,
+      description: `Quotation approval requested for RFQ #${rfqId}`,
+      ipAddress: null
+    });
+
+    await logAndNotify(user.id, {
+      action: 'QUOTATION_SELECTED',
+      module: 'Quotation Management',
+      entityType: 'quotation',
+      entityId: selected_quotation_id,
+      description: `Quotation selected for RFQ #${rfqId}`,
+      ipAddress: null
+    });
+
+    await logAndNotify(user.id, {
+      action: 'RFQ_CLOSED',
+      module: 'RFQ Management',
+      entityType: 'rfq',
+      entityId: rfqId,
+      description: `RFQ closed due to selection`,
+      ipAddress: null
+    });
 
     await conn.commit();
     conn.release();

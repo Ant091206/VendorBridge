@@ -9,6 +9,7 @@ import {
   sendPasswordResetEmail
 } from '../services/authService.js';
 import dotenv from 'dotenv';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 dotenv.config();
 
@@ -177,6 +178,16 @@ export const login = async (req, res) => {
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn });
+
+    // Log Activity
+    await logAndNotify(user.id, {
+      action: 'USER_LOGGED_IN',
+      module: 'Authentication',
+      entityType: 'user',
+      entityId: user.id,
+      description: `User ${user.name} logged in successfully`,
+      ipAddress: req.ip
+    });
 
     return res.status(200).json({
       status: 'success',

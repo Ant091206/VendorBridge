@@ -1,6 +1,6 @@
 import pool from '../config/db.js';
 import { generateInvoiceNumber } from '../utils/invoiceNumberGenerator.js';
-import { logActivity } from '../utils/activityLogger.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 import { generateInvoicePDF } from '../services/pdfService.js';
 import { sendEmail } from '../services/emailService.js';
 
@@ -108,8 +108,22 @@ export const generateInvoice = async (req, res) => {
     );
 
     // 5. Log activity
-    await logActivity(conn, req.user.id, 'invoice', invoiceId, 'INVOICE_GENERATED');
-    await logActivity(conn, req.user.id, 'purchase_order', po_id, 'PO_SENT');
+    await logAndNotify(req.user.id, {
+      action: 'INVOICE_GENERATED',
+      module: 'Invoices',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      description: `Invoice ${invoiceNumber} generated for PO #${po.po_number}`,
+      ipAddress: req.ip
+    });
+    await logAndNotify(req.user.id, {
+      action: 'PO_SENT',
+      module: 'Purchase Orders',
+      entityType: 'purchase_order',
+      entityId: po_id,
+      description: `Purchase order ${po.po_number} status updated to sent`,
+      ipAddress: req.ip
+    });
 
     await conn.commit();
     conn.release();
@@ -375,7 +389,14 @@ export const sendInvoiceEmail = async (req, res) => {
     );
 
     // Log operational activity
-    await logActivity(pool, req.user.id, 'invoice', id, 'INVOICE_EMAILED');
+    await logAndNotify(req.user.id, {
+      action: 'INVOICE_EMAILED',
+      module: 'Invoices',
+      entityType: 'invoice',
+      entityId: id,
+      description: `Invoice ${invoice.invoice_number} emailed to vendor`,
+      ipAddress: req.ip
+    });
 
     return res.status(200).json({
       status: 'success',
@@ -430,7 +451,14 @@ export const updateInvoiceStatus = async (req, res) => {
 
     // Log activity
     const action = status === 'paid' ? 'INVOICE_PAID' : 'INVOICE_SENT';
-    await logActivity(pool, req.user.id, 'invoice', id, action);
+    await logAndNotify(req.user.id, {
+      action: action,
+      module: 'Invoices',
+      entityType: 'invoice',
+      entityId: id,
+      description: `Invoice ${invoiceRows[0].invoice_number} status updated to ${status}`,
+      ipAddress: req.ip
+    });
 
     return res.status(200).json({
       status: 'success',

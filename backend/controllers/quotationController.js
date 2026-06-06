@@ -6,6 +6,7 @@ import {
   updateQuotationRecord
 } from '../services/quotationService.js';
 import { validateQuotationPayload } from '../validators/quotationValidator.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 const fail = (res, error, fallback = 'Request failed.') => {
   return res.status(error.statusCode || 500).json({
@@ -72,6 +73,17 @@ export const submitQuotation = async (req, res) => {
     }
 
     const quote = await createQuotationRecord(req.body, req.user);
+
+    // Log Activity & Dispatch Notifications
+    await logAndNotify(req.user.id, {
+      action: 'QUOTATION_SUBMITTED',
+      module: 'Quotation Management',
+      entityType: 'quotation',
+      entityId: quote.id,
+      description: `Quotation submitted for RFQ #${quote.rfq_id}`,
+      ipAddress: req.ip
+    });
+
     return res.status(201).json({
       status: 'success',
       message: 'Quotation submitted successfully!',

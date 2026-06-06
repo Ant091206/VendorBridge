@@ -121,3 +121,122 @@ export const exportInvoices = async () => {
     throw error.response?.data || new Error('Failed to export invoice data.');
   }
 };
+
+/**
+ * Fetch executive summary reports.
+ */
+export const getSummaryReport = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/summary');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve summary report.');
+  }
+};
+
+/**
+ * Fetch vendor performance data.
+ */
+export const getVendorsReport = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/vendors');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve vendor performance report.');
+  }
+};
+
+/**
+ * Fetch monthly spending report.
+ */
+export const getSpendingReport = async (year) => {
+  try {
+    const response = await axiosInstance.get('/reports/spending', {
+      params: year ? { year } : {}
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve spending report.');
+  }
+};
+
+/**
+ * Fetch RFQ status breakdown.
+ */
+export const getRFQStatusAnalytics = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/rfq-status');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve RFQ status analytics.');
+  }
+};
+
+/**
+ * Fetch Approvals breakdown.
+ */
+export const getApprovalsAnalytics = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/approvals');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve approvals analytics.');
+  }
+};
+
+/**
+ * Fetch monthly trend analysis.
+ */
+export const getMonthlyTrendsAnalytics = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/monthly-trends');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve monthly trends analytics.');
+  }
+};
+
+/**
+ * Export CSV Report
+ */
+export const exportReportCSV = async (type, year) => {
+  try {
+    const response = await axiosInstance.get('/reports/export/csv', {
+      params: { type, year },
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to export CSV report.');
+  }
+};
+
+/**
+ * Export Excel Report
+ */
+export const exportReportExcel = async (type, year) => {
+  try {
+    const response = await axiosInstance.get('/reports/export/excel', {
+      params: { type, year },
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to export Excel report.');
+  }
+};
+
+/**
+ * Export PDF Report
+ */
+export const exportReportPDF = async (type, year) => {
+  try {
+    const response = await axiosInstance.get('/reports/export/pdf', {
+      params: { type, year },
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to export PDF report.');
+  }
+};

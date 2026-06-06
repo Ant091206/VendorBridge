@@ -14,8 +14,13 @@ import ResetPassword from './pages/auth/ResetPassword';
 const Dashboard    = lazy(() => import('./pages/Dashboard'));
 const VendorPortal = lazy(() => import('./pages/VendorPortal'));
 const NotFound     = lazy(() => import('./pages/NotFound'));
-const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
-const Reports      = lazy(() => import('./pages/Reports'));
+const ActivityLogs = lazy(() => import('./pages/activity/ActivityLogs'));
+const ActivityDetails = lazy(() => import('./pages/activity/ActivityDetails'));
+const Notifications = lazy(() => import('./pages/notifications/Notifications'));
+const ReportsDashboard = lazy(() => import('./pages/reports/ReportsDashboard'));
+const VendorPerformance = lazy(() => import('./pages/reports/VendorPerformance'));
+const ProcurementAnalytics = lazy(() => import('./pages/reports/ProcurementAnalytics'));
+const SpendingAnalysis = lazy(() => import('./pages/reports/SpendingAnalysis'));
 
 // ── Lazily loaded pages — User Management (Module 1) ──
 const UserList   = lazy(() => import('./pages/users/UserList'));
@@ -355,13 +360,55 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/activity-logs/:id"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout><ActivityDetails /></Layout>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ── NOTIFICATIONS ── */}
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                  <Layout><Notifications /></Layout>
+                </ProtectedRoute>
+              }
+            />
 
             {/* ── REPORTS & ANALYTICS ── */}
             <Route
               path="/reports"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer']}>
-                  <Layout><Reports /></Layout>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                  <Layout><ReportsDashboard /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/vendors"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                  <Layout><VendorPerformance /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/analytics"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                  <Layout><ProcurementAnalytics /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/spending"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                  <Layout><SpendingAnalysis /></Layout>
                 </ProtectedRoute>
               }
             />

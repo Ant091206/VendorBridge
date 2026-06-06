@@ -7,6 +7,7 @@ import {
   updateRFQRecord
 } from '../services/rfqService.js';
 import { validateRFQPayload } from '../validators/rfqValidator.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 const fail = (res, error, fallback = 'Request failed.') => res.status(error.statusCode || 500).json({
   status: 'error',
@@ -47,6 +48,17 @@ export const createRFQ = async (req, res) => {
     }
 
     const rfq = await createRFQRecord(req.body, req.user);
+
+    // Log Activity & Dispatch Notifications
+    await logAndNotify(req.user.id, {
+      action: 'RFQ_CREATED',
+      module: 'RFQ Management',
+      entityType: 'rfq',
+      entityId: rfq.id,
+      description: `RFQ "${rfq.title}" created`,
+      ipAddress: req.ip
+    });
+
     return res.status(201).json({
       status: 'success',
       message: 'RFQ created and vendors assigned successfully.',
@@ -66,6 +78,17 @@ export const updateRFQ = async (req, res) => {
     }
 
     const rfq = await updateRFQRecord(req.params.id, req.body, req.user);
+
+    // Log Activity
+    await logAndNotify(req.user.id, {
+      action: 'RFQ_UPDATED',
+      module: 'RFQ Management',
+      entityType: 'rfq',
+      entityId: rfq.id,
+      description: `RFQ "${rfq.title}" updated`,
+      ipAddress: req.ip
+    });
+
     return res.status(200).json({
       status: 'success',
       message: 'RFQ updated successfully.',
@@ -80,6 +103,17 @@ export const updateRFQ = async (req, res) => {
 export const closeRFQ = async (req, res) => {
   try {
     await closeRFQRecord(req.params.id);
+
+    // Log Activity
+    await logAndNotify(req.user.id, {
+      action: 'RFQ_CLOSED',
+      module: 'RFQ Management',
+      entityType: 'rfq',
+      entityId: req.params.id,
+      description: `RFQ closed`,
+      ipAddress: req.ip
+    });
+
     return res.status(200).json({
       status: 'success',
       message: 'RFQ closed successfully.'

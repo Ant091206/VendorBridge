@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-import { logActivity } from '../utils/activityLogger.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 /**
  * GET /api/purchase-orders
@@ -291,7 +291,14 @@ export const updatePOStatus = async (req, res) => {
     
     // Log the activity
     const actionLogName = status === 'sent' ? 'PO_SENT' : 'PO_COMPLETED';
-    await logActivity(conn, req.user.id, 'purchase_order', id, actionLogName);
+    await logAndNotify(req.user.id, {
+      action: actionLogName,
+      module: 'Purchase Orders',
+      entityType: 'purchase_order',
+      entityId: id,
+      description: `Purchase order ${actionLogName === 'PO_SENT' ? 'dispatched' : 'completed'}`,
+      ipAddress: req.ip
+    });
     
     await conn.commit();
     conn.release();

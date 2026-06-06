@@ -16,8 +16,11 @@ import approvalRoutes from './routes/approvals.js';
 import purchaseOrderRoutes from './routes/purchaseOrders.js';
 import invoiceRoutes from './routes/invoices.js';
 import activityLogRoutes from './routes/activityLogs.js';
-import reportRoutes from './routes/reports.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
+import activityRoutes from './routes/activityRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import reportRoutesNew from './routes/reportRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 
 // Middleware imports
 import notFound from './middleware/notFound.js';
@@ -94,8 +97,11 @@ app.use('/api', approvalRoutes);
 app.use('/api', purchaseOrderRoutes);
 app.use('/api', invoiceRoutes);
 app.use('/api', activityLogRoutes);
-app.use('/api', reportRoutes);
 app.use('/api', dashboardRoutes);
+app.use('/api', activityRoutes);
+app.use('/api', notificationRoutes);
+app.use('/api', reportRoutesNew);
+app.use('/api', analyticsRoutes);
 
 // ── 404 Handler (must come after all routes) ──
 app.use(notFound);

@@ -113,10 +113,33 @@ CREATE TABLE IF NOT EXISTS `invoices` (
 -- 10. Activity Logs Table
 CREATE TABLE IF NOT EXISTS `activity_logs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` INT,
+  `user_id` INT NULL,
+  `user_name` VARCHAR(255) NULL,
+  `role` VARCHAR(50) NULL,
+  `module` VARCHAR(100) NULL,
   `entity_type` VARCHAR(50) NOT NULL,
   `entity_id` INT NOT NULL,
   `action` VARCHAR(255) NOT NULL,
+  `description` TEXT NULL,
+  `ip_address` VARCHAR(45) NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `idx_activity_logs_created_at` (`created_at` DESC),
+  INDEX `idx_activity_logs_module` (`module`),
+  INDEX `idx_activity_logs_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11. Notifications Table
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `title` VARCHAR(255) NOT NULL,
+  `message` TEXT NOT NULL,
+  `type` VARCHAR(50) NOT NULL,
+  `is_read` TINYINT(1) NOT NULL DEFAULT 0,
+  `reference_type` VARCHAR(50) NULL,
+  `reference_id` INT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX `idx_notifications_user_unread` (`user_id`, `is_read`, `created_at` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

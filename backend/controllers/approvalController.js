@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-import { logActivity } from '../utils/activityLogger.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 import { generatePONumber } from '../utils/poNumberGenerator.js';
 import { sendEmail } from '../services/emailService.js';
 
@@ -290,8 +290,22 @@ export const approveRequest = async (req, res) => {
     const poId = poResult.insertId;
     
     // Log activity
-    await logActivity(conn, req.user.id, 'approval', id, 'APPROVAL_APPROVED');
-    await logActivity(conn, req.user.id, 'purchase_order', poId, 'PO_GENERATED');
+    await logAndNotify(req.user.id, {
+      action: 'APPROVAL_APPROVED',
+      module: 'Approval Workflow',
+      entityType: 'approval',
+      entityId: id,
+      description: `RFQ "${approval.rfq_title}" selection approved`,
+      ipAddress: req.ip
+    });
+    await logAndNotify(req.user.id, {
+      action: 'PO_GENERATED',
+      module: 'Purchase Orders',
+      entityType: 'purchase_order',
+      entityId: poId,
+      description: `Purchase order ${poNumber} auto-generated`,
+      ipAddress: req.ip
+    });
     
     await conn.commit();
     conn.release();
@@ -479,7 +493,14 @@ export const rejectRequest = async (req, res) => {
     );
     
     // Log activity
-    await logActivity(conn, req.user.id, 'approval', id, 'APPROVAL_REJECTED');
+    await logAndNotify(req.user.id, {
+      action: 'APPROVAL_REJECTED',
+      module: 'Approval Workflow',
+      entityType: 'approval',
+      entityId: id,
+      description: `RFQ "${approval.rfq_title}" selection rejected. Reason: ${remarks}`,
+      ipAddress: req.ip
+    });
     
     await conn.commit();
     conn.release();

@@ -41,3 +41,27 @@ export const getMyActivity = async () => {
     throw error.response?.data || new Error('Failed to retrieve your activity history.');
   }
 };
+
+/**
+ * Fetch all activity logs (Admin route, Module 9)
+ */
+export const getAllActivity = async (params) => {
+  try {
+    const response = await axiosInstance.get('/activity', { params });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve activity logs.');
+  }
+};
+
+/**
+ * Fetch a single activity detail by ID
+ */
+export const getActivityById = async (id) => {
+  try {
+    const response = await axiosInstance.get(`/activity/${id}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve activity detail.');
+  }
+};

@@ -10,6 +10,7 @@ import {
   updateVendorRecord
 } from '../services/vendorService.js';
 import { validateCategoryPayload, validateVendorPayload } from '../validators/vendorValidator.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 const fail = (res, error, fallback = 'Request failed.') => res.status(error.statusCode || 500).json({
   status: 'error',
@@ -52,6 +53,17 @@ export const createVendor = async (req, res) => {
     }
 
     const vendor = await createVendorRecord(req.body, req.user);
+
+    // Log Activity & Dispatch Notifications
+    await logAndNotify(req.user.id, {
+      action: 'VENDOR_CREATED',
+      module: 'Vendor Management',
+      entityType: 'vendor',
+      entityId: vendor.id,
+      description: `Vendor "${vendor.vendor_name || vendor.name}" registered`,
+      ipAddress: req.ip
+    });
+
     return res.status(201).json({
       status: 'success',
       message: 'Vendor created successfully.',
