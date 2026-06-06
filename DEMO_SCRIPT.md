@@ -1,154 +1,110 @@
-# VendorBridge — Hackathon Demo Script
-# Total Time: 8-10 minutes
+# VendorBridge ERP — Live Demo Walkthrough Script
 
-## Opening (30 seconds)
-"VendorBridge is a Procurement & Vendor 
-Management ERP that digitizes the entire 
-purchasing lifecycle — from vendor 
-registration to invoice generation — 
-with structured workflows and real-time 
-tracking."
+This script outlines the step-by-step walkthrough of the **VendorBridge ERP** system during live demo sessions and hackathon evaluations. It demonstrates a complete procurement lifecycle across all 4 system roles.
 
 ---
 
-## Scene 1: Admin View (1 minute)
+## 🔑 Login Credentials
 
-Login as: admin@vendorbridge.com / Admin@123
-
-Show:
-1. Dashboard with KPI cards
-   "5 active vendors, 3 RFQs, 
-    ₹56 lakhs total procurement spend"
-2. Vendor Management
-   Show vendor list with status badges
-   Show GST details and categories
-3. Reports → Overview tab
-   Show monthly spending bar chart
-   Show spending by category pie chart
-   "Admin has full visibility into all 
-    procurement activities and analytics."
+| Role | Email | Password | Primary Focus |
+|---|---|---|---|
+| **Procurement Admin** | `admin@vendorbridge.com` | `Admin@123` | System Settings, Users, Full Audits |
+| **Procurement Officer** | `officer@vendorbridge.com` | `Officer@123` | RFQs, Selection, Invoicing |
+| **Manager** | `manager@vendorbridge.com` | `Manager@123` | Approval Decisions, PO Oversight |
+| **Vendor Candidate** | `vendor1@vendorbridge.com` | `Vendor@123` | Bidding, PO Acknowledgement, Invoicing |
 
 ---
 
-## Scene 2: Procurement Officer (2 minutes)
+## 🎬 Stage 1: Procurement Officer Flow (RFQ Creation & Invitation)
 
-Login as: officer@vendorbridge.com / Officer@123
+**Goal:** Create a new request for quotation and invite suppliers to submit bids.
 
-Show:
-1. Dashboard — officer view
-
-2. Create New RFQ:
-   - Fill title: "Server Hardware Procurement"
-   - Add description, quantity: 10, deadline
-   - Select 2-3 vendors from checklist
-   - Click "Create RFQ & Notify Vendors"
-   - Show success toast
-   "Vendors are automatically notified 
-    via email invitation"
-
-3. Show existing RFQ 3 (open, has quotes)
-   - Click "Compare Quotations"
-   - Show comparison table
-   - Highlight lowest price in green
-   "Side-by-side comparison helps us 
-    choose the best vendor"
+1. Open browser to `http://localhost:5173`.
+2. Log in using `officer@vendorbridge.com` / `Officer@123`.
+3. Navigate to **RFQs** in the left sidebar.
+4. Click the **Create RFQ** button.
+5. Fill out the RFQ Form:
+   - **Title:** `High-performance LED Projectors for Bangalore Boardrooms`
+   - **Description:** `We require 4 ultra-short throw 4K laser projectors, minimum 5000 lumens brightness, including mounting brackets.`
+   - **Quantity:** `4`
+   - **Category:** `Hardware & Electronics`
+   - **Deadline:** Choose a date 2 weeks in the future.
+6. Under **Supplier Assignment**, select `GlobalHardware Pvt Ltd` and `AeroConnect Systems`.
+7. Click **Save Draft** first to show draft saving, then click **Publish RFQ**.
+8. **Explain to Judges:** "Upon publication, VendorBridge automatically logs the activity and triggers real-time SMTP emails inviting the selected vendors to bid."
 
 ---
 
-## Scene 3: Vendor Portal (1.5 minutes)
+## 🎬 Stage 2: Vendor Bidding Flow
 
-Login as: vendor1@vendorbridge.com / Vendor@123
+**Goal:** Log in as a vendor, review the RFQ invitation, and submit a pricing proposal.
 
-Show:
-1. Vendor portal — their assigned RFQs
-
-2. Click Submit Quote on the open RFQ
-   - Fill unit price, delivery days, notes
-   - Watch total auto-calculate live
-   - Submit quotation
-   "Vendors submit competitive quotes 
-    through their dedicated portal"
-
-3. Show "Submitted" status update
-
----
-
-## Scene 4: Back to Officer (1 minute)
-
-Login as: officer@vendorbridge.com / Officer@123
-
-Show:
-1. Quotation comparison — new submission visible
-2. Select the winning vendor
-   - Show confirm modal
-   "Once selected, all vendors are 
-    automatically notified by email"
+1. Click **Logout** at the bottom of the sidebar.
+2. Log in using `vendor1@vendorbridge.com` / `Vendor@123` (representative for `TechVision Solutions` / `GlobalHardware`).
+3. Point out the **Vendor Portal** dashboard.
+4. Select **Assigned RFQs** to see the newly published project.
+5. Click **Submit Quotation** for the Bangalore Project.
+6. Fill in the bidding form:
+   - **Unit Price:** `₹ 82,000` (Total calculates to `₹ 3,28,000` instantly)
+   - **Delivery Timeline:** `5` calendar days
+   - **Notes:** `Includes premium warranty of 2 years, ceiling mount, and free installation service.`
+7. Click **Submit Proposal**.
+8. **Explain to Judges:** "The bid is locked. The vendor can optionally modify it until the deadline, and notifications are sent to the procurement desk."
 
 ---
 
-## Scene 5: Manager Approval (1.5 minutes)
+## 🎬 Stage 3: Quotation Comparison & Winner Selection (Officer)
 
-Login as: manager@vendorbridge.com / Manager@123
+**Goal:** Compare all supplier bids side-by-side and select the winning vendor.
 
-Show:
-1. Dashboard — pending approvals highlighted
-2. Approval Queue — pending card visible
-3. Click View Details on approval
-   - Show price analysis section:
-     "Selected price vs lowest available"
-4. Click Approve, add remarks
-   - Show success: "Purchase Order Generated!"
-   "On approval, PO is auto-generated 
-    with unique number and GST calculation"
+1. Log back in as `officer@vendorbridge.com` / `Officer@123`.
+2. Open **RFQs** and select the Bangalore Project.
+3. Click the **Compare Bids** action button at the top-right.
+4. Point out the **Quotation Comparison Matrix**:
+   - Focus on how VendorBridge highlights the lowest price in green.
+   - Point out unit pricing, delivery timelines, and vendor remarks.
+5. Select the bid submitted by `GlobalHardware Pvt Ltd` and click **Select Winner**.
+6. **Explain to Judges:** "Selecting a winner locks the RFQ. It automatically sends rejection notices to other suppliers, and submits the selection for manager approval."
 
 ---
 
-## Scene 6: Invoice Generation (2 minutes)
+## 🎬 Stage 4: Manager Approval Queue (Manager)
 
-Login as: officer@vendorbridge.com / Officer@123
+**Goal:** Review selection and approve the procurement, triggering automatic PO generation.
 
-Show:
-1. Purchase Orders list — new PO visible
-2. Open PO Detail
-   - Show professional PO layout
-   - Line items, subtotal, 18% GST, grand total
-3. Click "Generate Invoice"
-   - Show invoice preview
-   - Click Generate
-4. Invoice Detail page opens
-   "This is a professional tax invoice"
-5. Click "Download PDF"
-   - Show PDF downloading
-   - Open the PDF — show it looks professional
-6. Click "Send via Email"
-   "Invoice sent to vendor email 
-    with PDF attachment"
-7. Click "Print"
-   - Show print dialog opens
-   "Sidebar and buttons are hidden, 
-    only invoice prints"
+1. Log in using `manager@vendorbridge.com` / `Manager@123`.
+2. Navigate to **Approvals** (or **Approval Queue**).
+3. Select the pending request for ` Bangalore Boardrooms`.
+4. Point out the **Price Analysis Summary**:
+   - Explains bid cost details and warns if the selection is higher than the lowest bid.
+5. Under **Remarks**, enter: `Approved. Selection justified by shorter delivery timeline and warranty features.`
+6. Click **Approve Request**.
+7. **Explain to Judges:** "Approving the selection changes status to 'approved', generates sequential Purchase Order `PO-2026-XXXX`, creates activity logs, and notifies the officer."
 
 ---
 
-## Scene 7: Analytics (30 seconds)
+## 🎬 Stage 5: Purchase Order & Invoice Generation (Officer)
 
-Login as: admin@vendorbridge.com / Admin@123
+**Goal:** View PO and generate the official tax invoice.
 
-Show Reports page:
-  - Monthly spending bar chart
-  - Vendor performance table with win rates
-  "Complete procurement intelligence 
-   in one dashboard"
+1. Log back in as `officer@vendorbridge.com` / `Officer@123`.
+2. Navigate to **Purchase Orders** and select the newly approved order.
+3. Review the automatic PO cost calculation (subtotal, 18% standard GST, and grand total).
+4. Click **Generate Tax Invoice**.
+5. Highlight the options:
+   - Click **Download PDF**: Stream and open the A4 styled invoice PDF generated using Puppeteer.
+   - Click **Print Invoice**: Show the clean, sidebar-hidden print preview dialog.
+   - Click **Email Invoice**: Point out the background Nodemailer dispatch with PDF attachment.
 
 ---
 
-## Closing (30 seconds)
-"VendorBridge demonstrates proper ERP 
-architecture with:
-- Role-based access control
-- Structured approval workflows  
-- Automated document generation
-- Real-time analytics
-- Clean modular codebase
+## 🎬 Stage 6: Audit Logs & Intelligence Dashboard (Admin)
 
-Thank you."
+**Goal:** Review full audit logs and system analytics.
+
+1. Log in as `admin@vendorbridge.com` / `Admin@123`.
+2. Navigate to **Activity Logs** to show the detailed audit trail of everything that happened.
+3. Navigate to **Reports & Analytics**:
+   - Point out monthly spending trends.
+   - Show supplier performance logs and conversion charts.
+   - Point out that Admin can export the spend sheets to Excel or CSV.

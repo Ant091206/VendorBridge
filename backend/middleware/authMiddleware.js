@@ -29,7 +29,14 @@ export const verifyToken = (req, res, next) => {
   const token = tokenParts[1];
 
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET || 'vendorbridge_dev_secret_key_12345');
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({
+        status: 'error',
+        message: 'Internal configuration error: JWT Secret is not configured.'
+      });
+    }
+    const verified = jwt.verify(token, jwtSecret);
     // Attach verified user payload to the request object
     req.user = verified;
     next();

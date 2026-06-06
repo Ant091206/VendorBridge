@@ -333,6 +333,7 @@ export async function generateInvoicePDF(invoice) {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
+      timeout: 30000, // 30 seconds max timeout
       margin: {
         top: '20mm',
         right: '15mm',

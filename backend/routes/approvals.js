@@ -11,15 +11,15 @@ import {
 
 const router = express.Router();
 
-// GET /api/approvals - Return all approvals (manager and admin only)
-router.get('/approvals', verifyToken, restrictTo('manager', 'admin'), getAllApprovals);
+// GET /api/approvals - Return all approvals (manager, admin, and officer)
+router.get('/approvals', verifyToken, restrictTo('manager', 'admin', 'officer'), getAllApprovals);
 
 // GET /api/approvals/pending - Return pending approvals only (manager and admin only)
 // Note: Placed above /approvals/:id to prevent parameter collision
 router.get('/approvals/pending', verifyToken, restrictTo('manager', 'admin'), getPendingApprovals);
 
-// GET /api/approvals/:id - Return details of a single approval (manager and admin only)
-router.get('/approvals/:id', verifyToken, restrictTo('manager', 'admin'), getApprovalById);
+// GET /api/approvals/:id - Return details of a single approval (manager, admin, and officer)
+router.get('/approvals/:id', verifyToken, restrictTo('manager', 'admin', 'officer'), getApprovalById);
 
 // PUT /api/approvals/:id/approve - Approve request & auto-generate PO (manager and admin only)
 router.put('/approvals/:id/approve', verifyToken, restrictTo('manager', 'admin'), approveRequest);

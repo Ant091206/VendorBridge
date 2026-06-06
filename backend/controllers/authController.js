@@ -13,7 +13,11 @@ import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'vendorbridge_dev_secret_key_12345';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL ERROR: JWT_SECRET environment variable is missing.');
+  process.exit(1);
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 /**
@@ -145,7 +149,7 @@ export const login = async (req, res) => {
     const user = users[0];
 
     // Check account status
-    if (user.status !== 'active') {
+    if (!user.status || user.status !== 'active') {
       return res.status(403).json({
         status: 'error',
         message: 'Your account has been deactivated. Please contact an administrator.'

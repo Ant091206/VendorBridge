@@ -49,17 +49,20 @@ const VendorQuotationEdit = lazy(() => import('./pages/quotations/VendorQuotatio
 const VendorQuotationDetails = lazy(() => import('./pages/quotations/VendorQuotationDetails'));
 
 // ── Lazily loaded pages — Approval Module ──
+const ApprovalList   = lazy(() => import('./pages/approvals/ApprovalList'));
 const ApprovalQueue  = lazy(() => import('./pages/approvals/ApprovalQueue'));
-const ApprovalDetail = lazy(() => import('./pages/approvals/ApprovalDetail'));
+const ApprovalDetails = lazy(() => import('./pages/approvals/ApprovalDetails'));
 
 // ── Lazily loaded pages — Purchase Order Module ──
 const POList      = lazy(() => import('./pages/purchaseOrders/POList'));
 const PODetail    = lazy(() => import('./pages/purchaseOrders/PODetail'));
+const POPreview   = lazy(() => import('./pages/purchaseOrders/POPreview'));
 const VendorPOList = lazy(() => import('./pages/vendor/VendorPOList'));
 
 // ── Lazily loaded pages — Invoice Module ──
 const InvoiceList     = lazy(() => import('./pages/invoices/InvoiceList'));
 const InvoiceDetail   = lazy(() => import('./pages/invoices/InvoiceDetail'));
+const InvoicePreview  = lazy(() => import('./pages/invoices/InvoicePreview'));
 const GenerateInvoice = lazy(() => import('./pages/invoices/GenerateInvoice'));
 const VendorInvoices  = lazy(() => import('./pages/vendor/VendorInvoices'));
 
@@ -277,6 +280,14 @@ function App() {
             <Route
               path="/approvals"
               element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
+                  <Layout><ApprovalList /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/approvals/queue"
+              element={
                 <ProtectedRoute allowedRoles={['admin', 'manager']}>
                   <Layout><ApprovalQueue /></Layout>
                 </ProtectedRoute>
@@ -285,8 +296,8 @@ function App() {
             <Route
               path="/approvals/:id"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'manager']}>
-                  <Layout><ApprovalDetail /></Layout>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
+                  <Layout><ApprovalDetails /></Layout>
                 </ProtectedRoute>
               }
             />
@@ -305,6 +316,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
                   <Layout><PODetail /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/purchase-orders/:id/preview"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                  <POPreview />
                 </ProtectedRoute>
               }
             />
@@ -331,6 +350,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'officer']}>
                   <Layout><InvoiceDetail /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/invoices/:id/preview"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'vendor']}>
+                  <InvoicePreview />
                 </ProtectedRoute>
               }
             />

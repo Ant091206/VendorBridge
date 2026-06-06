@@ -29,7 +29,7 @@ const Sidebar = () => {
     { label: 'Vendors', path: '/vendors', icon: Building2, roles: ['admin', 'officer'] },
     { label: 'RFQs', path: '/rfqs', icon: FileText, roles: ['admin', 'officer'] },
     { label: 'Quotations', path: '/quotations', icon: ClipboardList, roles: ['admin', 'officer'] },
-    { label: 'Approvals', path: '/approvals', icon: CheckCircle2, roles: ['admin', 'manager'] },
+    { label: 'Approvals', path: '/approvals', icon: CheckCircle2, roles: ['admin', 'officer', 'manager'] },
     { label: 'Purchase Orders', path: '/purchase-orders', icon: ShoppingCart, roles: ['admin', 'officer', 'manager'] },
     { label: 'Invoices', path: '/invoices', icon: Receipt, roles: ['admin', 'officer'] },
     { label: 'Reports', path: '/reports', icon: BarChart3, roles: ['admin', 'officer', 'manager'] },

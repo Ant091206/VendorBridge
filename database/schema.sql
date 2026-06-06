@@ -11,7 +11,27 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` VARCHAR(255) UNIQUE NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
   `role` ENUM('admin', 'officer', 'vendor', 'manager') NOT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  `last_login` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_users_status` (`status`),
+  INDEX `idx_users_role` (`role`),
+  INDEX `idx_users_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 1B. Password Reset Tokens Table
+CREATE TABLE IF NOT EXISTS `password_reset_tokens` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `token` VARCHAR(255) NOT NULL,
+  `expires_at` TIMESTAMP NOT NULL,
+  `used` BOOLEAN DEFAULT FALSE,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  UNIQUE KEY `unique_token` (`token`),
+  INDEX `idx_expires` (`expires_at`),
+  INDEX `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Vendor Categories Table
@@ -31,7 +51,9 @@ CREATE TABLE IF NOT EXISTS `vendors` (
   `status` ENUM('active', 'inactive', 'blacklisted') NOT NULL DEFAULT 'active',
   `category_id` INT,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`category_id`) REFERENCES `vendor_categories` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  FOREIGN KEY (`category_id`) REFERENCES `vendor_categories` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `idx_vendors_status` (`status`),
+  INDEX `idx_vendors_email_status` (`email`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. RFQs (Request For Quotations) Table
@@ -44,7 +66,9 @@ CREATE TABLE IF NOT EXISTS `rfqs` (
   `status` ENUM('draft', 'open', 'closed') NOT NULL DEFAULT 'draft',
   `created_by` INT,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `idx_rfqs_status` (`status`),
+  INDEX `idx_rfqs_status_deadline` (`status`, `deadline`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. RFQ Vendors Junction Table
@@ -69,7 +93,9 @@ CREATE TABLE IF NOT EXISTS `quotations` (
   `status` ENUM('draft', 'submitted', 'selected', 'rejected') NOT NULL DEFAULT 'draft',
   `submitted_at` TIMESTAMP NULL DEFAULT NULL,
   FOREIGN KEY (`rfq_id`) REFERENCES `rfqs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  FOREIGN KEY (`vendor_id`) REFERENCES `vendors` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX `idx_quotations_status` (`status`),
+  INDEX `idx_quotations_rfq_vendor` (`rfq_id`, `vendor_id`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. Approvals Table
@@ -81,7 +107,8 @@ CREATE TABLE IF NOT EXISTS `approvals` (
   `remarks` TEXT,
   `decided_at` TIMESTAMP NULL DEFAULT NULL,
   FOREIGN KEY (`quotation_id`) REFERENCES `quotations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  FOREIGN KEY (`approver_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  FOREIGN KEY (`approver_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  INDEX `idx_approvals_decision` (`decision`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 8. Purchase Orders Table
@@ -94,7 +121,8 @@ CREATE TABLE IF NOT EXISTS `purchase_orders` (
   `grand_total` DECIMAL(12,2) NOT NULL,
   `status` ENUM('generated', 'sent', 'completed') NOT NULL DEFAULT 'generated',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`approval_id`) REFERENCES `approvals` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  FOREIGN KEY (`approval_id`) REFERENCES `approvals` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  INDEX `idx_purchase_orders_created` (`status`, `created_at` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 9. Invoices Table
@@ -107,7 +135,8 @@ CREATE TABLE IF NOT EXISTS `invoices` (
   `grand_total` DECIMAL(12,2) NOT NULL,
   `status` ENUM('generated', 'sent', 'paid') NOT NULL DEFAULT 'generated',
   `issued_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (`po_id`) REFERENCES `purchase_orders` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  FOREIGN KEY (`po_id`) REFERENCES `purchase_orders` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  INDEX `idx_invoices_issued` (`po_id`, `status`, `issued_at` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 10. Activity Logs Table
@@ -126,7 +155,8 @@ CREATE TABLE IF NOT EXISTS `activity_logs` (
   FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   INDEX `idx_activity_logs_created_at` (`created_at` DESC),
   INDEX `idx_activity_logs_module` (`module`),
-  INDEX `idx_activity_logs_user_id` (`user_id`)
+  INDEX `idx_activity_logs_user_id` (`user_id`),
+  INDEX `idx_activity_logs_entity_type` (`entity_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 11. Notifications Table

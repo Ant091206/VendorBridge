@@ -20,6 +20,7 @@ export const getAllApprovals = async (req, res) => {
         a.remarks,
         a.decided_at,
         u.name AS approver_name,
+        r_usr.name AS requested_by_name,
         q.unit_price,
         q.total_price,
         q.delivery_days,
@@ -34,6 +35,7 @@ export const getAllApprovals = async (req, res) => {
       JOIN vendors v ON q.vendor_id = v.id
       LEFT JOIN vendor_categories vc ON v.category_id = vc.id
       JOIN rfqs r ON q.rfq_id = r.id
+      LEFT JOIN users r_usr ON r.created_by = r_usr.id
       LEFT JOIN users u ON a.approver_id = u.id
     `;
     
@@ -74,6 +76,7 @@ export const getPendingApprovals = async (req, res) => {
         a.remarks,
         a.decided_at,
         u.name AS approver_name,
+        r_usr.name AS requested_by_name,
         q.unit_price,
         q.total_price,
         q.delivery_days,
@@ -88,6 +91,7 @@ export const getPendingApprovals = async (req, res) => {
       JOIN vendors v ON q.vendor_id = v.id
       LEFT JOIN vendor_categories vc ON v.category_id = vc.id
       JOIN rfqs r ON q.rfq_id = r.id
+      LEFT JOIN users r_usr ON r.created_by = r_usr.id
       LEFT JOIN users u ON a.approver_id = u.id
       WHERE a.decision = 'pending'
       ORDER BY a.id DESC
@@ -124,6 +128,7 @@ export const getApprovalById = async (req, res) => {
         a.remarks,
         a.decided_at,
         u.name AS approver_name,
+        r_usr.name AS requested_by_name,
         q.id AS quotation_id,
         q.unit_price,
         q.total_price,
@@ -144,6 +149,7 @@ export const getApprovalById = async (req, res) => {
       JOIN vendors v ON q.vendor_id = v.id
       LEFT JOIN vendor_categories vc ON v.category_id = vc.id
       JOIN rfqs r ON q.rfq_id = r.id
+      LEFT JOIN users r_usr ON r.created_by = r_usr.id
       LEFT JOIN users u ON a.approver_id = u.id
       LEFT JOIN purchase_orders po ON po.approval_id = a.id
       WHERE a.id = ?
