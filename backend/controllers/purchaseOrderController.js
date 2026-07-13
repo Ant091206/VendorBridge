@@ -1,326 +1,228 @@
-import pool from '../config/db.js';
-import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
+import {
+  createPurchaseOrder,
+  getPurchaseOrders,
+  getPurchaseOrderById,
+  updatePurchaseOrder,
+  deletePurchaseOrder,
+  issuePurchaseOrder,
+  cancelPurchaseOrder,
+  acknowledgePurchaseOrder,
+  updatePOStatusManual,
+  getPOHistory
+} from '../services/purchaseOrderService.js';
+import { validatePOCreation, validatePOUpdate } from '../validators/purchaseOrderValidator.js';
+
+const fail = (res, error, fallback = 'Purchase Order operation failed.') => {
+  return res.status(error.statusCode || 500).json({
+    status: 'error',
+    message: error.message || fallback
+  });
+};
 
 /**
- * GET /api/purchase-orders
- * Returns all purchase orders in the system.
- * Protected: officer and admin only (and managers for approval linkages)
- * Query Params: ?status=generated|sent|completed &search=po_number_or_vendor_name
+ * POST /api/purchase-orders
+ * Create new Purchase Order in Draft
  */
-export const getAllPurchaseOrders = async (req, res) => {
+export const createPO = async (req, res) => {
+  const errors = validatePOCreation(req.body);
+  if (errors.length > 0) {
+    return res.status(400).json({ status: 'error', message: errors[0], errors });
+  }
+
   try {
-    const { status, search } = req.query;
-    
-    let sql = `
-      SELECT 
-        po.id, 
-        po.po_number, 
-        po.subtotal, 
-        po.tax_amount, 
-        po.grand_total, 
-        po.status, 
-        po.created_at,
-        v.name AS vendor_name, 
-        v.email AS vendor_email, 
-        v.gst_number AS vendor_gst,
-        r.title AS rfq_title, 
-        r.quantity AS rfq_quantity
-      FROM purchase_orders po
-      JOIN approvals a ON po.approval_id = a.id
-      JOIN quotations q ON a.quotation_id = q.id
-      JOIN vendors v ON q.vendor_id = v.id
-      JOIN rfqs r ON q.rfq_id = r.id
-    `;
-    
-    const params = [];
-    const conditions = [];
-    
-    if (status) {
-      conditions.push(`po.status = ?`);
-      params.push(status);
-    }
-    
-    if (search) {
-      conditions.push(`(po.po_number LIKE ? OR v.name LIKE ?)`);
-      const searchPattern = `%${search}%`;
-      params.push(searchPattern, searchPattern);
-    }
-    
-    if (conditions.length > 0) {
-      sql += ` WHERE ` + conditions.join(' AND ');
-    }
-    
-    sql += ` ORDER BY po.id DESC`;
-    
-    const [rows] = await pool.execute(sql, params);
-    
-    return res.status(200).json({
+    const result = await createPurchaseOrder(req.body, req.user.id);
+    return res.status(201).json({
       status: 'success',
-      data: rows
+      message: 'Purchase Order created successfully in Draft.',
+      data: result
     });
   } catch (error) {
-    console.error('Error in getAllPurchaseOrders:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Failed to retrieve purchase orders.'
-    });
+    console.error('Error in createPO:', error);
+    return fail(res, error, 'Failed to create Purchase Order.');
   }
 };
 
 /**
- * GET /api/purchase-orders/vendor/my-orders
- * Returns purchase orders issued to the currently logged-in vendor.
- * Protected: vendor only
+ * GET /api/purchase-orders
+ * List purchase orders with filters, search, and pagination
  */
-export const getMyPurchaseOrders = async (req, res) => {
+export const getAllPOs = async (req, res) => {
   try {
-    // Look up vendor ID associated with the vendor's login email
-    const [vendorRecord] = await pool.execute(
-      'SELECT id FROM vendors WHERE email = ?',
-      [req.user.email]
-    );
-    
-    if (vendorRecord.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Vendor record not found for the logged-in email.'
-      });
-    }
-    
-    const vendorId = vendorRecord[0].id;
-    
-    const sql = `
-      SELECT 
-        po.id,
-        po.po_number, 
-        po.grand_total, 
-        po.status, 
-        po.created_at,
-        r.title AS rfq_title
-      FROM purchase_orders po
-      JOIN approvals a ON po.approval_id = a.id
-      JOIN quotations q ON a.quotation_id = q.id
-      JOIN vendors v ON q.vendor_id = v.id
-      JOIN rfqs r ON q.rfq_id = r.id
-      WHERE v.id = ?
-      ORDER BY po.id DESC
-    `;
-    
-    const [rows] = await pool.execute(sql, [vendorId]);
-    
+    const result = await getPurchaseOrders(req.query, req.user);
     return res.status(200).json({
       status: 'success',
-      data: rows
+      data: result.purchaseOrders,
+      stats: result.stats,
+      pagination: result.pagination
     });
   } catch (error) {
-    console.error('Error in getMyPurchaseOrders:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Failed to retrieve vendor purchase orders.'
-    });
+    console.error('Error in getAllPOs:', error);
+    return fail(res, error, 'Failed to retrieve Purchase Orders.');
   }
 };
 
 /**
  * GET /api/purchase-orders/:id
- * Returns complete single purchase order details.
- * Protected: officer, admin, manager, or the vendor it belongs to.
+ * Retrieve details of a single purchase order
  */
-export const getPurchaseOrderById = async (req, res) => {
+export const getPOById = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    const sql = `
-      SELECT 
-        po.id,
-        po.po_number,
-        po.subtotal,
-        po.tax_amount,
-        po.grand_total,
-        po.status,
-        po.created_at,
-        v.id AS vendor_id,
-        v.name AS vendor_name,
-        v.email AS vendor_email,
-        v.phone AS vendor_phone,
-        v.address AS vendor_address,
-        v.gst_number AS vendor_gst,
-        r.title AS rfq_title,
-        r.quantity AS rfq_quantity,
-        r.description AS rfq_description,
-        q.unit_price AS quotation_unit_price,
-        q.delivery_days AS quotation_delivery_days,
-        q.notes AS quotation_notes,
-        a.id AS approval_id,
-        a.remarks AS approval_remarks,
-        a.decided_at AS approval_decided_at,
-        u.name AS approver_name,
-        inv.id AS invoice_id,
-        inv.invoice_number AS invoice_number
-      FROM purchase_orders po
-      JOIN approvals a ON po.approval_id = a.id
-      JOIN quotations q ON a.quotation_id = q.id
-      JOIN vendors v ON q.vendor_id = v.id
-      JOIN rfqs r ON q.rfq_id = r.id
-      LEFT JOIN users u ON a.approver_id = u.id
-      LEFT JOIN invoices inv ON inv.po_id = po.id
-      WHERE po.id = ?
-    `;
-    
-    const [rows] = await pool.execute(sql, [id]);
-    
-    if (rows.length === 0) {
+    const po = await getPurchaseOrderById(req.params.id, req.user);
+    if (!po) {
       return res.status(404).json({
         status: 'error',
-        message: 'Purchase order not found.'
+        message: 'Purchase Order not found.'
       });
     }
-    
-    const po = rows[0];
-    
-    // If user is a vendor, check if this PO belongs to them
-    if (req.user.role === 'vendor') {
-      const [vendorRecord] = await pool.execute(
-        'SELECT id FROM vendors WHERE email = ?',
-        [req.user.email]
-      );
-      
-      if (vendorRecord.length === 0 || vendorRecord[0].id !== po.vendor_id) {
-        return res.status(403).json({
-          status: 'error',
-          message: 'Access Denied: You are not authorized to view this purchase order.'
-        });
-      }
-    }
-    
-    // Construct line items list
-    po.line_items = [
-      {
-        description: po.rfq_title,
-        quantity: parseInt(po.rfq_quantity, 10),
-        unit_price: parseFloat(po.quotation_unit_price),
-        subtotal: parseFloat(po.subtotal),
-        tax_rate: 18,
-        tax_amount: parseFloat(po.tax_amount),
-        grand_total: parseFloat(po.grand_total)
-      }
-    ];
-    
     return res.status(200).json({
       status: 'success',
       data: po
     });
   } catch (error) {
-    console.error('Error in getPurchaseOrderById:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Failed to retrieve purchase order details.'
-    });
+    console.error('Error in getPOById:', error);
+    return fail(res, error, 'Failed to retrieve Purchase Order details.');
   }
 };
 
 /**
- * PUT /api/purchase-orders/:id/status
- * Updates PO status following state machine rules:
- * generated -> sent -> completed
- * Protected: officer and admin only (and manager for operational flow)
+ * PUT /api/purchase-orders/:id
+ * Update a Draft Purchase Order
  */
-export const updatePOStatus = async (req, res) => {
-  const conn = await pool.getConnection();
+export const updatePO = async (req, res) => {
+  const errors = validatePOUpdate(req.body);
+  if (errors.length > 0) {
+    return res.status(400).json({ status: 'error', message: errors[0], errors });
+  }
+
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-    
-    const validStatuses = ['sent', 'completed'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid status. Status can only be updated to: sent, completed.'
-      });
-    }
-    
-    // Get current PO status
-    const [poRows] = await conn.execute(
-      'SELECT status FROM purchase_orders WHERE id = ?',
-      [id]
-    );
-    
-    if (poRows.length === 0) {
-      conn.release();
-      return res.status(404).json({
-        status: 'error',
-        message: 'Purchase order not found.'
-      });
-    }
-    
-    const currentStatus = poRows[0].status;
-    
-    // Validate state machine transitions
-    // generated -> sent -> completed
-    if (currentStatus === 'generated' && status !== 'sent') {
-      conn.release();
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid state transition. A newly generated PO must be marked as "sent" first.'
-      });
-    }
-    
-    if (currentStatus === 'sent' && status !== 'completed') {
-      conn.release();
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid state transition. A "sent" PO can only transition to "completed".'
-      });
-    }
-    
-    if (currentStatus === 'completed') {
-      conn.release();
-      return res.status(400).json({
-        status: 'error',
-        message: 'Purchase order is already completed and cannot be transitioned further.'
-      });
-    }
-    
-    // Execute update inside a transaction
-    await conn.beginTransaction();
-    
-    await conn.execute(
-      'UPDATE purchase_orders SET status = ? WHERE id = ?',
-      [status, id]
-    );
-    
-    // Log the activity
-    const actionLogName = status === 'sent' ? 'PO_SENT' : 'PO_COMPLETED';
-    await logAndNotify(req.user.id, {
-      action: actionLogName,
-      module: 'Purchase Orders',
-      entityType: 'purchase_order',
-      entityId: id,
-      description: `Purchase order ${actionLogName === 'PO_SENT' ? 'dispatched' : 'completed'}`,
-      ipAddress: req.ip
-    });
-    
-    await conn.commit();
-    conn.release();
-    
+    const result = await updatePurchaseOrder(req.params.id, req.body, req.user.id);
     return res.status(200).json({
       status: 'success',
-      message: `Purchase order status updated to ${status}.`,
-      data: {
-        id: id,
-        status: status
-      }
+      message: 'Purchase Order updated successfully.',
+      data: result
     });
-    
   } catch (error) {
-    if (conn.connection && conn.connection._protocol && conn.connection._protocol._fatalError === null) {
-      await conn.rollback();
-    }
-    conn.release();
-    console.error('Error in updatePOStatus:', error);
-    return res.status(500).json({
-      status: 'error',
-      message: 'Failed to update purchase order status.'
+    console.error('Error in updatePO:', error);
+    return fail(res, error, 'Failed to update Purchase Order.');
+  }
+};
+
+/**
+ * DELETE /api/purchase-orders/:id
+ * Delete a Draft Purchase Order
+ */
+export const deletePO = async (req, res) => {
+  try {
+    const result = await deletePurchaseOrder(req.params.id, req.user.id);
+    return res.status(200).json({
+      status: 'success',
+      message: 'Purchase Order deleted successfully.',
+      data: result
     });
+  } catch (error) {
+    console.error('Error in deletePO:', error);
+    return fail(res, error, 'Failed to delete Purchase Order.');
+  }
+};
+
+/**
+ * PATCH /api/purchase-orders/:id/issue
+ * Issue a Draft Purchase Order
+ */
+export const issuePO = async (req, res) => {
+  try {
+    const result = await issuePurchaseOrder(req.params.id, req.user.id);
+    return res.status(200).json({
+      status: 'success',
+      message: 'Purchase Order issued successfully.',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error in issuePO:', error);
+    return fail(res, error, 'Failed to issue Purchase Order.');
+  }
+};
+
+/**
+ * PATCH /api/purchase-orders/:id/cancel
+ * Cancel an active Purchase Order
+ */
+export const cancelPO = async (req, res) => {
+  try {
+    const result = await cancelPurchaseOrder(req.params.id, req.body.remarks, req.user.id);
+    return res.status(200).json({
+      status: 'success',
+      message: 'Purchase Order cancelled successfully.',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error in cancelPO:', error);
+    return fail(res, error, 'Failed to cancel Purchase Order.');
+  }
+};
+
+/**
+ * PATCH /api/purchase-orders/:id/acknowledge
+ * Vendor Acknowledge Purchase Order
+ */
+export const acknowledgePO = async (req, res) => {
+  try {
+    const result = await acknowledgePurchaseOrder(
+      req.params.id,
+      req.body.remarks,
+      req.user.email,
+      req.user.id
+    );
+    return res.status(200).json({
+      status: 'success',
+      message: 'Purchase Order acknowledged successfully.',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error in acknowledgePO:', error);
+    return fail(res, error, 'Failed to acknowledge Purchase Order.');
+  }
+};
+
+/**
+ * PATCH /api/purchase-orders/:id/status
+ * Manually update PO status to Partially Fulfilled / Fulfilled (Officer/Admin only)
+ */
+export const updateStatusManual = async (req, res) => {
+  const { status, remarks } = req.body;
+  if (!status) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Status is required.'
+    });
+  }
+
+  try {
+    const result = await updatePOStatusManual(req.params.id, status, remarks, req.user.id);
+    return res.status(200).json({
+      status: 'success',
+      message: `Purchase Order status updated to ${status} successfully.`,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error in updateStatusManual:', error);
+    return fail(res, error, 'Failed to update Purchase Order status.');
+  }
+};
+
+/**
+ * GET /api/purchase-orders/:id/history
+ * Retrieve chronological timeline logs of a PO
+ */
+export const getHistoryTimeline = async (req, res) => {
+  try {
+    const result = await getPOHistory(req.params.id);
+    return res.status(200).json({
+      status: 'success',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error in getHistoryTimeline:', error);
+    return fail(res, error, 'Failed to retrieve timeline logs.');
   }
 };

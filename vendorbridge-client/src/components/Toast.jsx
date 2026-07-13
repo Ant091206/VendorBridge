@@ -1,57 +1,97 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { CheckCircle, XCircle, Info, X } from 'lucide-react';
 
 /**
- * Reusable Toast Notification Component
- * Triggers a popup message that auto-dismisses after 3 seconds.
+ * Toast Notification Component
+ * Light theme with colored left border, slide-in animation, and auto-dismiss.
+ *
  * Props:
  *   - message: String to display
  *   - type: 'success' | 'error' | 'info'
- *   - onClose: Callback function triggered when toast is dismissed
+ *   - onClose: Callback on dismiss
+ *   - duration: ms before auto-dismiss (default 3500)
  */
-const Toast = ({ message, type = 'info', onClose }) => {
+const DURATION = 3500;
+
+const typeConfig = {
+  success: {
+    icon: CheckCircle,
+    border: '#16A34A',
+    bg: '#F0FDF4',
+    text: '#15803D',
+    iconColor: '#16A34A',
+    label: 'Success',
+  },
+  error: {
+    icon: XCircle,
+    border: '#DC2626',
+    bg: '#FEF2F2',
+    text: '#B91C1C',
+    iconColor: '#DC2626',
+    label: 'Error',
+  },
+  info: {
+    icon: Info,
+    border: '#2563EB',
+    bg: '#EFF6FF',
+    text: '#1D4ED8',
+    iconColor: '#2563EB',
+    label: 'Info',
+  },
+};
+
+const Toast = ({ message, type = 'info', onClose, duration = DURATION }) => {
+  const [exiting, setExiting] = useState(false);
+
+  const handleClose = () => {
+    setExiting(true);
+    setTimeout(() => { if (onClose) onClose(); }, 200);
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onClose) onClose();
-    }, 3000);
+    if (!message) return;
+    const timer = setTimeout(handleClose, duration);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [message, duration]);
 
   if (!message) return null;
 
-  let styles = 'bg-slate-900 border-slate-800 text-slate-100 shadow-slate-950/50';
-  let iconColor = 'text-cyan-400';
-
-  if (type === 'success') {
-    styles = 'bg-slate-900 border-emerald-800/40 text-emerald-200 shadow-emerald-950/20';
-    iconColor = 'text-emerald-400';
-  } else if (type === 'error') {
-    styles = 'bg-slate-900 border-rose-800/40 text-rose-200 shadow-rose-950/20';
-    iconColor = 'text-rose-400';
-  }
+  const config = typeConfig[type] || typeConfig.info;
+  const Icon = config.icon;
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 flex max-w-sm items-center gap-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md transition-all duration-300 transform translate-y-0 scale-100 ${styles}`}>
-      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-950/40 ${iconColor}`}>
-        {type === 'success' ? (
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        ) : type === 'error' ? (
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        )}
+    <div
+      className="fixed bottom-5 right-5 z-[9999] w-80 max-w-[calc(100vw-40px)]"
+      style={{ animation: exiting ? 'none' : 'toast-enter 200ms ease forwards' }}
+    >
+      <div
+        className="flex items-start gap-3 rounded-lg bg-white border border-[#E5E7EB] shadow-[0_10px_15px_-3px_rgba(0,0,0,0.07),0_4px_6px_-4px_rgba(0,0,0,0.04)] p-4 overflow-hidden"
+        style={{ borderLeft: `3px solid ${config.border}` }}
+      >
+        <Icon size={16} className="shrink-0 mt-0.5" style={{ color: config.iconColor }} />
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-[#111827]">{message}</p>
+        </div>
+
+        <button
+          onClick={handleClose}
+          className="shrink-0 text-[#9CA3AF] hover:text-[#374151] transition-colors duration-100 cursor-pointer"
+          aria-label="Dismiss"
+        >
+          <X size={15} />
+        </button>
       </div>
-      <div className="flex-1 text-sm font-medium">{message}</div>
-      <button onClick={onClose} className="text-slate-400 hover:text-white transition">
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+
+      {/* Progress bar */}
+      <div
+        className="h-0.5 rounded-full mt-1.5 mx-1"
+        style={{
+          backgroundColor: config.border,
+          animation: `progress-shrink ${duration}ms linear forwards`,
+          opacity: 0.5,
+        }}
+      />
     </div>
   );
 };

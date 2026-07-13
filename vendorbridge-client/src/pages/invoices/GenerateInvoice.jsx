@@ -138,7 +138,7 @@ const GenerateInvoice = () => {
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-green-500 transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
             >
               {generating ? 'Generating Invoice...' : 'Generate Invoice'}
             </button>

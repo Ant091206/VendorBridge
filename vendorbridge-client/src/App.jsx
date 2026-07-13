@@ -4,72 +4,66 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import AppLoader from './components/AppLoader';
 
-// ── Eagerly loaded (critical path — auth pages) ──
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 
-// ── Lazily loaded pages — Main ──
-const Dashboard    = lazy(() => import('./pages/Dashboard'));
-const VendorPortal = lazy(() => import('./pages/VendorPortal'));
-const NotFound     = lazy(() => import('./pages/NotFound'));
-const ActivityLogs = lazy(() => import('./pages/activity/ActivityLogs'));
-const ActivityDetails = lazy(() => import('./pages/activity/ActivityDetails'));
-const Notifications = lazy(() => import('./pages/notifications/Notifications'));
-const ReportsDashboard = lazy(() => import('./pages/reports/ReportsDashboard'));
-const VendorPerformance = lazy(() => import('./pages/reports/VendorPerformance'));
-const ProcurementAnalytics = lazy(() => import('./pages/reports/ProcurementAnalytics'));
-const SpendingAnalysis = lazy(() => import('./pages/reports/SpendingAnalysis'));
+const Dashboard             = lazy(() => import('./pages/Dashboard'));
+const VendorPortal          = lazy(() => import('./pages/VendorPortal'));
+const NotFound              = lazy(() => import('./pages/NotFound'));
+const ActivityLogs          = lazy(() => import('./pages/activity/ActivityLogs'));
+const ActivityDetails       = lazy(() => import('./pages/activity/ActivityDetails'));
+const Notifications         = lazy(() => import('./pages/notifications/Notifications'));
+const ReportsDashboard      = lazy(() => import('./pages/reports/ReportsDashboard'));
+const VendorPerformance     = lazy(() => import('./pages/reports/VendorPerformance'));
+const ProcurementAnalytics  = lazy(() => import('./pages/reports/ProcurementAnalytics'));
+const SpendingAnalysis      = lazy(() => import('./pages/reports/SpendingAnalysis'));
+const ApprovalAnalytics     = lazy(() => import('./pages/reports/ApprovalAnalytics'));
+const PurchaseOrderAnalytics = lazy(() => import('./pages/reports/PurchaseOrderAnalytics'));
+const InvoiceAnalytics      = lazy(() => import('./pages/reports/InvoiceAnalytics'));
+const ReportsCenter         = lazy(() => import('./pages/reports/ReportsCenter'));
 
-// ── Lazily loaded pages — User Management (Module 1) ──
 const UserList   = lazy(() => import('./pages/users/UserList'));
 const UserCreate = lazy(() => import('./pages/users/UserCreate'));
 const UserEdit   = lazy(() => import('./pages/users/UserEdit'));
 const Profile    = lazy(() => import('./pages/profile/Profile'));
 
-// ── Lazily loaded pages — Vendor Module ──
-const VendorList   = lazy(() => import('./pages/vendors/VendorList'));
-const AddVendor    = lazy(() => import('./pages/vendors/AddVendor'));
-const EditVendor   = lazy(() => import('./pages/vendors/EditVendor'));
-const VendorDetail = lazy(() => import('./pages/vendors/VendorDetail'));
+const VendorList       = lazy(() => import('./pages/vendors/VendorList'));
+const VendorCategories = lazy(() => import('./pages/vendors/VendorCategories'));
+const AddVendor        = lazy(() => import('./pages/vendors/AddVendor'));
+const EditVendor       = lazy(() => import('./pages/vendors/EditVendor'));
+const VendorDetail     = lazy(() => import('./pages/vendors/VendorDetail'));
 
-// ── Lazily loaded pages — RFQ Module ──
-const RFQList    = lazy(() => import('./pages/rfqs/RFQList'));
-const CreateRFQ  = lazy(() => import('./pages/rfqs/CreateRFQ'));
-const EditRFQ    = lazy(() => import('./pages/rfqs/EditRFQ'));
-const RFQDetail  = lazy(() => import('./pages/rfqs/RFQDetail'));
+const RFQList   = lazy(() => import('./pages/rfqs/RFQList'));
+const CreateRFQ = lazy(() => import('./pages/rfqs/CreateRFQ'));
+const EditRFQ   = lazy(() => import('./pages/rfqs/EditRFQ'));
+const RFQDetail = lazy(() => import('./pages/rfqs/RFQDetail'));
 
-// ── Lazily loaded pages — Quotation Module ──
-const QuotationList       = lazy(() => import('./pages/quotations/QuotationList'));
-const QuotationComparison = lazy(() => import('./pages/comparison/QuotationComparison'));
-const VendorQuotationList = lazy(() => import('./pages/quotations/VendorQuotationList'));
+const QuotationList        = lazy(() => import('./pages/quotations/QuotationList'));
+const QuotationComparison  = lazy(() => import('./pages/comparison/QuotationComparison'));
+const VendorQuotationList  = lazy(() => import('./pages/quotations/VendorQuotationList'));
 const VendorQuotationCreate = lazy(() => import('./pages/quotations/VendorQuotationCreate'));
-const VendorQuotationEdit = lazy(() => import('./pages/quotations/VendorQuotationEdit'));
+const VendorQuotationEdit  = lazy(() => import('./pages/quotations/VendorQuotationEdit'));
 const VendorQuotationDetails = lazy(() => import('./pages/quotations/VendorQuotationDetails'));
 
-// ── Lazily loaded pages — Approval Module ──
-const ApprovalList   = lazy(() => import('./pages/approvals/ApprovalList'));
-const ApprovalQueue  = lazy(() => import('./pages/approvals/ApprovalQueue'));
+const ApprovalList    = lazy(() => import('./pages/approvals/ApprovalList'));
+const ApprovalQueue   = lazy(() => import('./pages/approvals/ApprovalQueue'));
 const ApprovalDetails = lazy(() => import('./pages/approvals/ApprovalDetails'));
 
-// ── Lazily loaded pages — Purchase Order Module ──
-const POList      = lazy(() => import('./pages/purchaseOrders/POList'));
-const PODetail    = lazy(() => import('./pages/purchaseOrders/PODetail'));
-const POPreview   = lazy(() => import('./pages/purchaseOrders/POPreview'));
+const POList       = lazy(() => import('./pages/purchaseOrders/POList'));
+const PODetail     = lazy(() => import('./pages/purchaseOrders/PODetail'));
+const POPreview    = lazy(() => import('./pages/purchaseOrders/POPreview'));
 const VendorPOList = lazy(() => import('./pages/vendor/VendorPOList'));
+const CreatePO     = lazy(() => import('./pages/purchaseOrders/CreatePurchaseOrder'));
+const PODashboard  = lazy(() => import('./pages/purchaseOrders/PurchaseOrderDashboard'));
 
-// ── Lazily loaded pages — Invoice Module ──
 const InvoiceList     = lazy(() => import('./pages/invoices/InvoiceList'));
 const InvoiceDetail   = lazy(() => import('./pages/invoices/InvoiceDetail'));
 const InvoicePreview  = lazy(() => import('./pages/invoices/InvoicePreview'));
 const GenerateInvoice = lazy(() => import('./pages/invoices/GenerateInvoice'));
 const VendorInvoices  = lazy(() => import('./pages/vendor/VendorInvoices'));
 
-/**
- * Route protection guard. Ensures user is logged in
- * and optionally matches allowed roles.
- */
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
 
@@ -87,24 +81,21 @@ function App() {
       <Router>
         <Suspense fallback={<AppLoader />}>
           <Routes>
-            {/* ── PUBLIC AUTH ROUTES ── */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
-            {/* ── DASHBOARD ── */}
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><Dashboard /></Layout>
                 </ProtectedRoute>
               }
             />
 
-            {/* ── VENDOR PORTAL (vendor role only) ── */}
             <Route
               path="/vendor-portal"
               element={
@@ -114,7 +105,6 @@ function App() {
               }
             />
 
-            {/* ── USER MANAGEMENT MODULE (admin only) ── */}
             <Route
               path="/users"
               element={
@@ -140,22 +130,28 @@ function App() {
               }
             />
 
-            {/* ── PROFILE (all authenticated users) ── */}
             <Route
               path="/profile"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><Profile /></Layout>
                 </ProtectedRoute>
               }
             />
 
-            {/* ── VENDOR MODULE ── */}
             <Route
               path="/vendors"
               element={
                 <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
                   <Layout><VendorList /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/vendor-categories"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout><VendorCategories /></Layout>
                 </ProtectedRoute>
               }
             />
@@ -184,7 +180,6 @@ function App() {
               }
             />
 
-            {/* ── RFQ MODULE ── */}
             <Route
               path="/rfqs"
               element={
@@ -218,7 +213,6 @@ function App() {
               }
             />
 
-            {/* ── QUOTATION MODULE ── */}
             <Route
               path="/quotations"
               element={
@@ -238,7 +232,7 @@ function App() {
             <Route
               path="/quotations/compare/:rfqId"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
                   <Layout><QuotationComparison /></Layout>
                 </ProtectedRoute>
               }
@@ -246,7 +240,7 @@ function App() {
             <Route
               path="/comparison/:rfqId"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
                   <Layout><QuotationComparison /></Layout>
                 </ProtectedRoute>
               }
@@ -276,7 +270,6 @@ function App() {
               }
             />
 
-            {/* ── APPROVAL MODULE ── */}
             <Route
               path="/approvals"
               element={
@@ -302,19 +295,50 @@ function App() {
               }
             />
 
-            {/* ── PURCHASE ORDER MODULE ── */}
             <Route
               path="/purchase-orders"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'finance']}>
                   <Layout><POList /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/purchase-orders/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'finance']}>
+                  <Layout><PODashboard /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/purchase-orders/create"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                  <Layout><CreatePO /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/purchase-orders/create/:approvalId"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                  <Layout><CreatePO /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/purchase-orders/edit/:poId"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                  <Layout><CreatePO /></Layout>
                 </ProtectedRoute>
               }
             />
             <Route
               path="/purchase-orders/:id"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><PODetail /></Layout>
                 </ProtectedRoute>
               }
@@ -322,7 +346,7 @@ function App() {
             <Route
               path="/purchase-orders/:id/preview"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <POPreview />
                 </ProtectedRoute>
               }
@@ -336,11 +360,10 @@ function App() {
               }
             />
 
-            {/* ── INVOICE MODULE ── */}
             <Route
               path="/invoices"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                <ProtectedRoute allowedRoles={['admin', 'finance']}>
                   <Layout><InvoiceList /></Layout>
                 </ProtectedRoute>
               }
@@ -348,7 +371,7 @@ function App() {
             <Route
               path="/invoices/:id"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                <ProtectedRoute allowedRoles={['admin', 'finance']}>
                   <Layout><InvoiceDetail /></Layout>
                 </ProtectedRoute>
               }
@@ -356,7 +379,7 @@ function App() {
             <Route
               path="/invoices/:id/preview"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'finance', 'vendor']}>
                   <InvoicePreview />
                 </ProtectedRoute>
               }
@@ -364,7 +387,7 @@ function App() {
             <Route
               path="/invoices/generate/:poId"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer']}>
+                <ProtectedRoute allowedRoles={['admin', 'finance']}>
                   <Layout><GenerateInvoice /></Layout>
                 </ProtectedRoute>
               }
@@ -378,11 +401,10 @@ function App() {
               }
             />
 
-            {/* ── ACTIVITY LOGS ── */}
             <Route
               path="/activity-logs"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><ActivityLogs /></Layout>
                 </ProtectedRoute>
               }
@@ -390,27 +412,25 @@ function App() {
             <Route
               path="/activity-logs/:id"
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><ActivityDetails /></Layout>
                 </ProtectedRoute>
               }
             />
 
-            {/* ── NOTIFICATIONS ── */}
             <Route
               path="/notifications"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><Notifications /></Layout>
                 </ProtectedRoute>
               }
             />
 
-            {/* ── REPORTS & ANALYTICS ── */}
             <Route
               path="/reports"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><ReportsDashboard /></Layout>
                 </ProtectedRoute>
               }
@@ -418,7 +438,7 @@ function App() {
             <Route
               path="/reports/vendors"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><VendorPerformance /></Layout>
                 </ProtectedRoute>
               }
@@ -426,7 +446,7 @@ function App() {
             <Route
               path="/reports/analytics"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><ProcurementAnalytics /></Layout>
                 </ProtectedRoute>
               }
@@ -434,13 +454,44 @@ function App() {
             <Route
               path="/reports/spending"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor']}>
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'vendor', 'finance']}>
                   <Layout><SpendingAnalysis /></Layout>
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/reports/approvals"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'finance']}>
+                  <Layout><ApprovalAnalytics /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/pos"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'finance']}>
+                  <Layout><PurchaseOrderAnalytics /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/invoices"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'finance']}>
+                  <Layout><InvoiceAnalytics /></Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports/center"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'officer', 'manager', 'finance']}>
+                  <Layout><ReportsCenter /></Layout>
+                </ProtectedRoute>
+              }
+            />
 
-            {/* ── 404 NOT FOUND ── */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

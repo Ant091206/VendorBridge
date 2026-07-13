@@ -1,208 +1,110 @@
 import axiosInstance from './axios';
 
 /**
- * Reports & Analytics API Functions
- * Provides client-side access to all reporting endpoints.
+ * Reports API Functions
+ * Provides client-side access to all reporting and export endpoints in Module 10.
  */
 
-/**
- * Fetch all KPI dashboard statistics in one call.
- */
-export const getDashboardStats = async () => {
+// ── Reports Data Endpoints (staff roles only) ──
+
+export const getVendorsReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/dashboard-stats');
+    const response = await axiosInstance.get('/reports/vendors', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve dashboard statistics.');
+    throw error.response?.data || new Error('Failed to retrieve vendors report.');
   }
 };
 
-/**
- * Fetch monthly spending breakdown.
- * @param {number} year - Target year (defaults to current year on server)
- */
-export const getMonthlySpending = async (year) => {
+export const getRFQsReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/monthly-spending', {
-      params: year ? { year } : {}
-    });
+    const response = await axiosInstance.get('/reports/rfqs', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve monthly spending data.');
+    throw error.response?.data || new Error('Failed to retrieve RFQs report.');
   }
 };
 
-/**
- * Fetch vendor performance metrics.
- */
-export const getVendorPerformance = async () => {
+export const getQuotationsReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/vendor-performance');
+    const response = await axiosInstance.get('/reports/quotations', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve vendor performance data.');
+    throw error.response?.data || new Error('Failed to retrieve quotations report.');
   }
 };
 
-/**
- * Fetch RFQ conversion analytics.
- */
-export const getRFQAnalytics = async () => {
+export const getApprovalsReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/rfq-analytics');
+    const response = await axiosInstance.get('/reports/approvals', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve RFQ analytics.');
+    throw error.response?.data || new Error('Failed to retrieve approvals report.');
   }
 };
 
-/**
- * Fetch spending grouped by vendor category.
- */
-export const getSpendingByCategory = async () => {
+export const getPurchaseOrdersReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/spending-by-category');
+    const response = await axiosInstance.get('/reports/purchase-orders', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve category spending data.');
+    throw error.response?.data || new Error('Failed to retrieve purchase orders report.');
   }
 };
 
-/**
- * Fetch top 5 vendors by business value.
- */
-export const getTopVendors = async () => {
+export const getInvoicesReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/top-vendors');
+    const response = await axiosInstance.get('/reports/invoices', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve top vendors.');
+    throw error.response?.data || new Error('Failed to retrieve invoices report.');
   }
 };
 
-/**
- * Export vendors list as CSV blob.
- */
-export const exportVendors = async () => {
+export const getSpendingReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/export/vendors', {
-      responseType: 'blob'
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to export vendor data.');
-  }
-};
-
-/**
- * Export purchase orders list as CSV blob.
- */
-export const exportPurchaseOrders = async () => {
-  try {
-    const response = await axiosInstance.get('/reports/export/purchase-orders', {
-      responseType: 'blob'
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to export purchase order data.');
-  }
-};
-
-/**
- * Export invoices list as CSV blob.
- */
-export const exportInvoices = async () => {
-  try {
-    const response = await axiosInstance.get('/reports/export/invoices', {
-      responseType: 'blob'
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to export invoice data.');
-  }
-};
-
-/**
- * Fetch executive summary reports.
- */
-export const getSummaryReport = async () => {
-  try {
-    const response = await axiosInstance.get('/reports/summary');
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve summary report.');
-  }
-};
-
-/**
- * Fetch vendor performance data.
- */
-export const getVendorsReport = async () => {
-  try {
-    const response = await axiosInstance.get('/reports/vendors');
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve vendor performance report.');
-  }
-};
-
-/**
- * Fetch monthly spending report.
- */
-export const getSpendingReport = async (year) => {
-  try {
-    const response = await axiosInstance.get('/reports/spending', {
-      params: year ? { year } : {}
-    });
+    const response = await axiosInstance.get('/reports/spending', { params: filters });
     return response.data;
   } catch (error) {
     throw error.response?.data || new Error('Failed to retrieve spending report.');
   }
 };
 
-/**
- * Fetch RFQ status breakdown.
- */
-export const getRFQStatusAnalytics = async () => {
+export const getSummaryReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/rfq-status');
+    const response = await axiosInstance.get('/reports/procurement-summary', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve RFQ status analytics.');
+    throw error.response?.data || new Error('Failed to retrieve summary report.');
   }
 };
 
-/**
- * Fetch Approvals breakdown.
- */
-export const getApprovalsAnalytics = async () => {
+export const getAuditActivityReport = async (filters = {}) => {
   try {
-    const response = await axiosInstance.get('/reports/approvals');
+    const response = await axiosInstance.get('/reports/audit-activity', { params: filters });
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve approvals analytics.');
+    throw error.response?.data || new Error('Failed to retrieve audit activity report.');
   }
 };
 
-/**
- * Fetch monthly trend analysis.
- */
-export const getMonthlyTrendsAnalytics = async () => {
+// ── Export History ──
+
+export const getExportHistory = async () => {
   try {
-    const response = await axiosInstance.get('/reports/monthly-trends');
+    const response = await axiosInstance.get('/reports/history');
     return response.data;
   } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve monthly trends analytics.');
+    throw error.response?.data || new Error('Failed to retrieve download history.');
   }
 };
 
-/**
- * Export CSV Report
- */
-export const exportReportCSV = async (type, year) => {
+// ── Document Exports ──
+
+export const exportReportCSV = async (type, filters = {}) => {
   try {
     const response = await axiosInstance.get('/reports/export/csv', {
-      params: { type, year },
+      params: { type, ...filters },
       responseType: 'blob'
     });
     return response.data;
@@ -211,13 +113,10 @@ export const exportReportCSV = async (type, year) => {
   }
 };
 
-/**
- * Export Excel Report
- */
-export const exportReportExcel = async (type, year) => {
+export const exportReportExcel = async (type, filters = {}) => {
   try {
     const response = await axiosInstance.get('/reports/export/excel', {
-      params: { type, year },
+      params: { type, ...filters },
       responseType: 'blob'
     });
     return response.data;
@@ -226,13 +125,10 @@ export const exportReportExcel = async (type, year) => {
   }
 };
 
-/**
- * Export PDF Report
- */
-export const exportReportPDF = async (type, year) => {
+export const exportReportPDF = async (type, filters = {}) => {
   try {
     const response = await axiosInstance.get('/reports/export/pdf', {
-      params: { type, year },
+      params: { type, ...filters },
       responseType: 'blob'
     });
     return response.data;
@@ -240,3 +136,40 @@ export const exportReportPDF = async (type, year) => {
     throw error.response?.data || new Error('Failed to export PDF report.');
   }
 };
+
+// ── Backward Compatibility Hooks ──
+export const getDashboardStats = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/summary');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve dashboard stats.');
+  }
+};
+
+export const getMonthlySpending = async (year) => {
+  try {
+    const response = await axiosInstance.get('/reports/spending', { params: year ? { year } : {} });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve monthly spending.');
+  }
+};
+
+export const getVendorPerformance = async () => {
+  try {
+    const response = await axiosInstance.get('/reports/vendors');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve vendor performance.');
+  }
+};
+export const getRFQStatusAnalytics = getRFQsReport;
+export const getApprovalsAnalytics = getApprovalsReport;
+export const getMonthlyTrendsAnalytics = getSpendingReport;
+export const getRFQAnalytics = getRFQsReport;
+export const getSpendingByCategory = getSpendingReport;
+export const getTopVendors = getVendorsReport;
+export const exportVendors = () => exportReportCSV('vendors');
+export const exportPurchaseOrders = () => exportReportCSV('purchase-orders');
+export const exportInvoices = () => exportReportCSV('invoices');

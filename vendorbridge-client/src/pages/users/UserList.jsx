@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, UserPlus, Edit, UserX, UserCheck, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Search, Filter, UserPlus, Edit, UserX, UserCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import LoadingSkeleton from '../../components/LoadingSkeleton';
 import EmptyState from '../../components/EmptyState';
@@ -13,10 +13,10 @@ import { getUsers, deleteUser } from '../../api/userApi';
  */
 
 const roleBadgeColors = {
-  admin: 'bg-purple-500/15 text-purple-400 border-purple-500/20',
-  officer: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20',
-  manager: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
-  vendor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
+  admin: 'bg-red-50 text-red-600 border-red-200',
+  officer: 'bg-primary/5 text-primary border-primary/20',
+  manager: 'bg-amber-50 text-amber-600 border-amber-200',
+  vendor: 'bg-emerald-50 text-emerald-600 border-emerald-200'
 };
 
 const roleLabels = {
@@ -27,8 +27,9 @@ const roleLabels = {
 };
 
 const statusBadgeColors = {
-  active: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-  inactive: 'bg-slate-500/15 text-slate-400 border-slate-500/20'
+  active:    'bg-emerald-50 text-emerald-600 border-emerald-100',
+  inactive:  'bg-slate-50 text-slate-500 border-slate-200',
+  suspended: 'bg-amber-50 text-amber-600 border-amber-200'
 };
 
 const UserList = () => {
@@ -88,7 +89,7 @@ const UserList = () => {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -96,46 +97,48 @@ const UserList = () => {
   };
 
   return (
-    <div>
-      <PageHeader
-        title="User Management"
-        subtitle="Manage all system users, roles, and access permissions."
-        actions={
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.16em] text-primary">Administration</p>
+          <h1 className="mt-2 text-3xl font-black text-slate-950 font-sans">User Management</h1>
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            Manage all system users, roles, and access permissions.
+          </p>
+        </div>
+        <div>
           <button
             onClick={() => navigate('/users/create')}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:from-cyan-400 hover:to-indigo-500 hover:shadow-indigo-500/30"
+            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-bold text-white shadow-lg shadow-green-500/10 hover:opacity-95 cursor-pointer"
           >
             <UserPlus className="h-4 w-4" />
             Create User
           </button>
-        }
-      />
+        </div>
+      </div>
 
       {/* Filters Bar */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-3">
+      <div className="grid grid-cols-1 gap-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-premium sm:grid-cols-3">
         {/* Search */}
         <form onSubmit={handleSearch} className="relative flex-1">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-            <Search className="h-4 w-4 text-slate-500" />
+            <Search className="h-4 w-4 text-slate-400" />
           </div>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or email..."
-            className="block w-full rounded-xl border border-slate-800 bg-slate-900/80 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 outline-none transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+            className="premium-input pl-10"
           />
         </form>
 
         {/* Role Filter */}
         <div className="relative">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <Filter className="h-4 w-4 text-slate-500" />
-          </div>
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="appearance-none rounded-xl border border-slate-800 bg-slate-900/80 py-2.5 pl-9 pr-8 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+            className="premium-input pr-10 cursor-pointer"
           >
             <option value="">All Roles</option>
             <option value="admin">Admin</option>
@@ -143,23 +146,27 @@ const UserList = () => {
             <option value="manager">Manager</option>
             <option value="vendor">Vendor</option>
           </select>
+          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+            <Filter size={14} />
+          </div>
         </div>
 
         {/* Status Filter */}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="appearance-none rounded-xl border border-slate-800 bg-slate-900/80 py-2.5 px-4 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+          className="premium-input cursor-pointer"
         >
-          <option value="">All Status</option>
+          <option value="">All Statuses</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="suspended">Suspended</option>
         </select>
       </div>
 
       {/* Data Table */}
       {loading ? (
-        <LoadingSkeleton rows={8} cols={6} />
+        <div className="h-96 animate-pulse rounded-[24px] bg-slate-200/80" />
       ) : users.length === 0 ? (
         <EmptyState
           icon="👥"
@@ -172,47 +179,47 @@ const UserList = () => {
           onAction={() => navigate('/users/create')}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80 shadow-lg">
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-premium">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-sm text-slate-600">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/40">
-                  <th className="px-5 py-3.5 font-semibold text-slate-400 text-xs uppercase tracking-wider">Name</th>
-                  <th className="px-5 py-3.5 font-semibold text-slate-400 text-xs uppercase tracking-wider">Email</th>
-                  <th className="px-5 py-3.5 font-semibold text-slate-400 text-xs uppercase tracking-wider">Role</th>
-                  <th className="px-5 py-3.5 font-semibold text-slate-400 text-xs uppercase tracking-wider">Status</th>
-                  <th className="px-5 py-3.5 font-semibold text-slate-400 text-xs uppercase tracking-wider">Created</th>
-                  <th className="px-5 py-3.5 font-semibold text-slate-400 text-xs uppercase tracking-wider text-right">Actions</th>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-black uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                  <th className="px-5 py-4">Name</th>
+                  <th className="px-5 py-4">Email</th>
+                  <th className="px-5 py-4">Role</th>
+                  <th className="px-5 py-4">Status</th>
+                  <th className="px-5 py-4">Created</th>
+                  <th className="px-5 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody className="divide-y divide-slate-100 font-semibold">
                 {users.map((user) => (
-                  <tr key={user.id} className="transition-colors hover:bg-slate-800/30">
+                  <tr key={user.id} className="transition-colors hover:bg-slate-50/50">
                     {/* Name with Avatar */}
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-slate-800 to-slate-700 text-sm font-bold text-white uppercase border border-slate-700/50">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-extrabold text-white uppercase shadow-md shadow-purple-500/10">
                           {user.name ? user.name[0] : 'U'}
                         </div>
-                        <span className="font-medium text-white">{user.name}</span>
+                        <span className="font-bold text-slate-900">{user.name}</span>
                       </div>
                     </td>
 
                     {/* Email */}
-                    <td className="px-5 py-4 text-slate-400">{user.email}</td>
+                    <td className="px-5 py-4 text-slate-650">{user.email}</td>
 
                     {/* Role Badge */}
                     <td className="px-5 py-4">
-                      <span className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-semibold ${roleBadgeColors[user.role] || ''}`}>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${roleBadgeColors[user.role] || ''}`}>
                         {roleLabels[user.role] || user.role}
                       </span>
                     </td>
 
                     {/* Status Badge */}
                     <td className="px-5 py-4">
-                      <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${statusBadgeColors[user.status] || ''}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${user.status === 'active' ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                        {user.status === 'active' ? 'Active' : 'Inactive'}
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${statusBadgeColors[user.status] || statusBadgeColors.inactive}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${user.status === 'active' ? 'bg-emerald-500' : user.status === 'suspended' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                        {user.status === 'active' ? 'Active' : user.status === 'suspended' ? 'Suspended' : 'Inactive'}
                       </span>
                     </td>
 
@@ -226,7 +233,7 @@ const UserList = () => {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => navigate(`/users/${user.id}/edit`)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-cyan-500/30 hover:bg-slate-800 hover:text-cyan-400"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-primary/20 hover:text-primary cursor-pointer"
                           title="Edit User"
                         >
                           <Edit className="h-3.5 w-3.5" />
@@ -235,14 +242,14 @@ const UserList = () => {
                         {user.status === 'active' ? (
                           <button
                             onClick={() => handleDeactivate(user)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-red-500/30 hover:bg-red-950/20 hover:text-red-400"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 transition hover:border-red-200 hover:text-red-600 hover:bg-red-50 cursor-pointer"
                             title="Deactivate User"
                           >
                             <UserX className="h-3.5 w-3.5" />
                             Deactivate
                           </button>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800/50 bg-slate-900/30 px-3 py-1.5 text-xs font-medium text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-400">
                             <UserCheck className="h-3.5 w-3.5" />
                             Inactive
                           </span>
@@ -257,15 +264,15 @@ const UserList = () => {
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-slate-800 px-5 py-3.5 bg-slate-950/30">
-              <p className="text-xs text-slate-500">
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 bg-slate-50/30">
+              <p className="text-xs font-bold text-slate-400">
                 Showing {(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} users
               </p>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => fetchUsers(pagination.page - 1)}
                   disabled={pagination.page <= 1}
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-400 transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -274,14 +281,14 @@ const UserList = () => {
                   .map((p, idx, arr) => (
                     <React.Fragment key={p}>
                       {idx > 0 && arr[idx - 1] !== p - 1 && (
-                        <span className="px-1 text-slate-600">…</span>
+                        <span className="px-1 text-slate-400 text-xs">…</span>
                       )}
                       <button
                         onClick={() => fetchUsers(p)}
-                        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-xs font-medium transition ${
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold transition cursor-pointer ${
                           p === pagination.page
-                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                            : 'border border-slate-800 bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white'
+                            ? 'bg-primary/10 text-primary border border-primary/20'
+                            : 'border border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
                         }`}
                       >
                         {p}
@@ -292,7 +299,7 @@ const UserList = () => {
                 <button
                   onClick={() => fetchUsers(pagination.page + 1)}
                   disabled={pagination.page >= pagination.totalPages}
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900/50 p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 text-slate-400 transition hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>

@@ -1,205 +1,258 @@
-VendorBridge
+# VendorBridge ERP
 
-A modern procurement and vendor management platform designed to simplify purchasing operations, improve supplier collaboration, and provide complete visibility across the procurement lifecycle.
+VendorBridge is a comprehensive, production-ready full-stack Enterprise Resource Planning (ERP) system designed to automate procurement operations, optimize vendor collaborations, and deliver end-to-end visibility throughout the procurement lifecycle. It replaces traditional, manual, error-prone workflows (relying on scattered spreadsheets and email chains) with a highly structured, automated, and secure digital platform.
 
----
-
-Overview
-
-VendorBridge is a web-based procurement management solution that helps organizations manage vendors, purchase requests, inventory, purchase orders, and payments through a centralized system.
-
-Traditional procurement processes often rely on spreadsheets, emails, and manual approvals, leading to delays, poor visibility, and data inconsistencies. VendorBridge addresses these challenges by providing a structured workflow that enables procurement teams to manage suppliers, track purchases, monitor inventory, and analyze procurement performance from a single platform.
-
-The platform was developed as part of the Odoo Hackathon with a focus on scalability, maintainability, strong database design, and real-world business requirements.
+The system was originally built as a practical, high-impact solution for the **Odoo Hackathon**, customized for **Hari Krupa Engineering Pvt Ltd**.
 
 ---
 
-Problem Statement
+## 🚀 Key Features
 
-Organizations frequently face challenges such as:
-
-- Manual vendor management
-- Lack of procurement transparency
-- Delayed purchase approvals
-- Poor inventory visibility
-- Inefficient supplier communication
-- Difficulty tracking procurement performance
-
-These issues often result in increased operational costs and reduced procurement efficiency.
-
----
-
-Solution
-
-VendorBridge provides a centralized procurement ecosystem that enables businesses to:
-
-- Manage vendor information and performance
-- Create and track purchase requests
-- Process purchase orders efficiently
-- Monitor inventory levels in real time
-- Track invoices and payments
-- Generate procurement insights and reports
-
-The platform streamlines procurement workflows while maintaining data integrity and accountability across departments.
+* **Secure Authentication & RBAC**: Advanced JWT authentication with password strength validation (`bcryptjs`) and secure role-based access control (guards for `admin`, `officer`, `manager`, `vendor`, and `finance`).
+* **Interactive Vendor Management**: Dynamic supplier database, categories division, and onboarding tracking with detailed profile management.
+* **Streamlined RFQ Workflow**: Automated Request for Quotation (RFQ) creation, category assignment, and email dispatches to relevant suppliers.
+* **Side-by-Side Bid Comparison**: Interactive matrix for procurement officers to compare multi-vendor bids, pricing breakdown, and delivery times.
+* **Structured Approval Routing**: Winner selection locking, rejection rollback capability, and supervisor approval logs.
+* **Automated Document Generation**: Real-time generation of formatted sequential Purchase Orders (`PO-YYYY-XXXX`) and Tax Invoices with standard GST.
+* **PDF Invoice Compiler**: Server-side rendering (using headless Puppeteer) of downloadable tax invoices with print-friendly CSS.
+* **Audit Trail**: Real-time activity logger recording system transactions, user logins, RFQ actions, and order status updates.
+* **Advanced Reports & Analytics**: Live Recharts dashboards displaying category-wise spend, vendor fulfillment rates, conversion metrics, decision times, and CSV/Excel data export modules.
 
 ---
 
-Core Modules
+## 🛠️ Tech Stack
 
-User & Role Management
+### Frontend
+* **Core**: React (Vite-powered SPA, ES Modules)
+* **Routing**: React Router DOM (v7)
+* **State & Forms**: Context API, React Hook Form
+* **Charts**: Recharts
+* **Animations**: Framer Motion
+* **Styling**: Tailwind CSS & Vanilla CSS (modern layout, responsive variables)
+* **HTTP Client**: Axios
 
-- Secure authentication and authorization
-- Role-based access control
-- Department-wise user management
+### Backend
+* **Runtime**: Node.js
+* **Framework**: Express.js
+* **Security**: Helmet, CORS, Express Rate Limit
+* **Database Driver**: MySQL2 (with connection pooling)
+* **Auth**: JSON Web Tokens (JWT), BcryptJS
+* **Mailing**: Nodemailer (SMTP/Gmail integration)
+* **PDF Generation**: Puppeteer
 
-Vendor Management
-
-- Vendor onboarding
-- Supplier database management
-- Vendor performance tracking
-- Vendor categorization
-
-Procurement Management
-
-- Purchase requisition workflow
-- Approval management
-- Purchase order generation
-- Procurement tracking
-
-Inventory Management
-
-- Product catalog management
-- Stock monitoring
-- Inventory updates
-- Low-stock alerts
-
-Payment Management
-
-- Invoice tracking
-- Payment status management
-- Financial transaction records
-
-Analytics & Reporting
-
-- Procurement insights
-- Vendor performance analysis
-- Inventory reports
-- Business dashboards
+### Database
+* **Engine**: MySQL (8.0+)
+* **Migrations**: Sequential SQL schema scripts
 
 ---
 
-Technology Stack
+## 📂 Folder Structure
 
-Frontend
-
-- React.js
-- React Router
-- Axios
-- Bootstrap / Tailwind CSS
-
-Backend
-
-- Node.js
-- Express.js
-- REST API Architecture
-- JWT Authentication
-
-Database
-
-- MySQL
-
-Development Tools
-
-- Git & GitHub
-- Postman
-- Visual Studio Code
-
----
-
-System Architecture
-
-Client Application (React.js)
-
-↓
-
-REST API Layer
-
-↓
-
-Node.js + Express.js Backend
-
-↓
-
-MySQL Database
-
----
-
-Key Highlights
-
-- Modular architecture
-- Scalable database design
-- Secure authentication system
-- Real-time procurement tracking
-- Responsive user interface
-- Industry-oriented workflow implementation
+```
+VendorBridge/
+├── backend/                  # Node.js + Express backend server
+│   ├── config/               # Database connection configuration
+│   ├── controllers/          # Request handler controllers
+│   ├── middleware/           # Express middlewares (auth, validation, errors)
+│   ├── routes/               # API route definitions
+│   ├── services/             # Core business logic services (emails, PDFs)
+│   ├── utils/                # Helper utilities (activity logger, PO/invoice generators)
+│   ├── validators/           # Request body validators
+│   ├── uploads/              # File uploads folder (empty, tracked)
+│   ├── server.js             # API entrypoint
+│   └── package.json          # Backend package dependencies
+├── database/                 # Database schema and sql migrations
+│   ├── migration_001_auth_module.sql
+│   ├── migration_002_vendor_rfq_modules.sql
+│   ├── migration_003_quotations_comparison.sql
+│   ├── migration_004_approvals_po_invoice.sql
+│   ├── schema.sql            # Core database schema
+│   ├── seed.js               # Standard seed script (JS)
+│   └── seed.sql              # Standard seed SQL data
+├── docs/                     # Project audits, reports, and checklists
+├── tests/                    # Developer test scripts (APIs, workflows, metrics)
+├── vendorbridge-client/      # React + Vite frontend application
+│   ├── src/
+│   │   ├── api/              # Axios API service clients
+│   │   ├── assets/           # Frontend static assets
+│   │   ├── components/       # Reusable React UI components
+│   │   ├── context/          # Auth context state provider
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── pages/            # React page components (views)
+│   │   ├── utils/            # Client-side price calculator and helpers
+│   │   ├── App.jsx           # Client entry routes definition
+│   │   └── main.jsx          # Client DOM mount
+│   ├── index.html            # HTML entry point
+│   ├── package.json          # Frontend package dependencies
+│   └── vite.config.js        # Vite build tool config
+├── package.json              # Root workspace orchestrator (concurrently)
+└── .gitignore                # Root-level ignore rules
+```
 
 ---
 
-Installation
+## ⚙️ Installation
 
-Clone Repository
-
-git clone https://github.com/your-username/VendorBridge.git
+### 1. Clone Repository
+```bash
+git clone https://github.com/Ant091206/VendorBridge.git
 cd VendorBridge
+```
 
-Install Dependencies
+### 2. Install Dependencies
+Restore dependencies for the root orchestrator, backend server, and frontend client:
+```bash
+npm run install:all
+```
 
-npm install
+---
 
-Configure Environment Variables
+## 🔑 Environment Variables
 
-Create a ".env" file:
+To run the application, configure your environments using `.env` files in their respective folders.
 
+### Backend (`/backend/.env`)
+Create a `.env` file in the `backend/` directory:
+```env
 PORT=5000
-
 DB_HOST=localhost
 DB_USER=root
-DB_PASSWORD=your_password
+DB_PASSWORD=your_mysql_password
 DB_NAME=vendorbridge
+JWT_SECRET=your_super_secret_jwt_key_here_min_32_chars
+JWT_EXPIRES_IN=7d
+EMAIL_USER=your_gmail@gmail.com
+EMAIL_PASS=your_gmail_app_password
+FRONTEND_URL=http://localhost:5173
+NODE_ENV=development
+```
 
-JWT_SECRET=your_secret_key
+### Frontend (`/vendorbridge-client/.env`)
+Create a `.env` file in the `vendorbridge-client/` directory:
+```env
+VITE_API_URL=http://localhost:5000/api
+VITE_APP_NAME=VendorBridge
+```
 
-Start Backend
+---
 
-npm run server
+## 💾 Database Setup
 
-Start Frontend
+Ensure MySQL Server is running locally.
 
-npm run client
+### 1. Initialize Database Schema
+Execute the consolidated schema file to initialize the `vendorbridge` database and tables structure:
+```bash
+# Using command-line client
+mysql -u root -p < database/schema.sql
 
-Run Complete Application
+# OR running the backend initialization helper
+node backend/dbInit.js
+```
 
+### 2. Apply Migrations (if applicable)
+Apply modules migrations in chronological order:
+```bash
+mysql -u root -p vendorbridge < database/migration_001_auth_module.sql
+mysql -u root -p vendorbridge < database/migration_002_vendor_rfq_modules.sql
+mysql -u root -p vendorbridge < database/migration_003_quotations_comparison.sql
+mysql -u root -p vendorbridge < database/migration_004_approvals_po_invoice.sql
+```
+
+### 3. Seed Database
+You can populate the database using either the standard sample dataset or the high-fidelity demo dataset.
+
+#### Standard Sample Dataset:
+```bash
+npm run seed
+```
+
+#### Massive High-Fidelity Dataset (6 months of activity history):
+```bash
+npm run seed:massive
+```
+
+---
+
+## 🏃 Running the Project
+
+### Development Mode
+Start both backend API server and frontend client concurrently:
+```bash
 npm run dev
+```
+* **Frontend Site**: [http://localhost:5173](http://localhost:5173)
+* **Backend API Docs/Base**: [http://localhost:5000](http://localhost:5000)
+
+### Production Build & Preview
+To compile the frontend application for production and view it locally:
+```bash
+cd vendorbridge-client
+npm run build
+npm run preview
+```
 
 ---
 
-Future Scope
+## 📐 Build & Deployment
 
-- AI-based vendor recommendations
-- Automated approval workflows
-- Email notification system
-- Multi-warehouse support
-- Advanced procurement analytics
-- Mobile application support
+### Build Instructions
+To build the frontend production-ready files:
+```bash
+cd vendorbridge-client
+npm run build
+```
+This outputs compiled, optimized HTML/CSS/JS assets to the `vendorbridge-client/dist/` directory.
+
+### Deployment Guide
+* **Backend**: Configured for Railway (`railway.json` and `Procfile` included) or Heroku. Ensure you configure environment variables on the hosting platform.
+* **Frontend**: Can be hosted on Vercel (`vercel.json` included), Netlify, or AWS S3. Connect build command to `npm run build` with output directory set to `dist`.
 
 ---
 
-Team
+## 📊 API Overview
 
-Developed for the Odoo Hackathon as a practical procurement and vendor management solution focused on solving real-world business challenges.
+| Method | Endpoint | Description | Role Allowed |
+|---|---|---|---|
+| **POST** | `/api/auth/register` | Create a new user profile | Public |
+| **POST** | `/api/auth/login` | Authenticate user and get JWT | Public |
+| **GET** | `/api/vendors` | List all suppliers | admin, officer, manager, vendor |
+| **POST** | `/api/rfqs` | Publish a new RFQ | admin, officer |
+| **POST** | `/api/quotations` | Submit quotation for RFQ | vendor |
+| **GET** | `/api/approvals/queue` | Retrieve pending winner approvals | admin, manager |
+| **POST** | `/api/invoices/generate/:poId`| Generate invoice from PO | admin, finance |
 
 ---
 
-License
+## 🖼️ Screenshots
 
-This project is licensed under the MIT License.
+*Screenshots demonstrating the dashboards, matrices, and layouts can be placed here during deployment.*
+
+---
+
+## 🔮 Future Improvements
+
+* **AI-based Vendor Scoring**: Dynamically score vendors based on past delivery speed and pricing consistency.
+* **SMS Notifications Integration**: Integrated SMS updates alongside Nodemailer SMTP.
+* **Multi-Warehouse Stock Mapping**: Add support for cross-warehouse shipping lines inside RFQs.
+
+---
+
+## 👥 Authors
+
+* **Vivek Maheshwari** - Senior Software Engineer
+* **Manav Lathiya** - Codebase Architect & Full Stack Developer
+* **Jugal Kshatriya** - Database Engineer & API Specialist
+* **Aayush Malhotra** - Frontend UI/UX Designer
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the LICENSE file for details.
+
+---
+
+## 🤝 Acknowledgements
+
+Developed with dedication for the **Odoo Hackathon** to resolve real-world procurement friction. Special thanks to the judges and mentors for their support.

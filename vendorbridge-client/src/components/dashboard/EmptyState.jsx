@@ -1,13 +1,18 @@
 import React from 'react';
 import { Inbox } from 'lucide-react';
 
-const EmptyState = ({ title = 'No data yet', message = 'Dashboard data will appear as records are created.' }) => (
-  <div className="flex min-h-36 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-8 text-center">
-    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
-      <Inbox size={20} />
+/**
+ * Dashboard-specific EmptyState (used inside panels)
+ */
+const EmptyState = ({ title = 'No data yet', message }) => (
+  <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3F4F6] mb-2.5">
+      <Inbox size={17} strokeWidth={1.5} className="text-[#9CA3AF]" />
     </div>
-    <p className="mt-3 text-sm font-bold text-slate-800">{title}</p>
-    <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">{message}</p>
+    <p className="text-sm font-medium text-[#374151]">{title}</p>
+    {message && (
+      <p className="mt-1 text-xs text-[#9CA3AF] max-w-xs">{message}</p>
+    )}
   </div>
 );
 

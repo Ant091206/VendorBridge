@@ -1,28 +1,55 @@
 import React from 'react';
 
-const roleCopy = {
-  admin: 'System-wide procurement control center',
-  officer: 'RFQ pipeline, approvals, and buying activity',
-  manager: 'Approval health and decision queue',
-  vendor: 'Your RFQs, quotations, orders, and invoice status'
+const roleMeta = {
+  admin:   { badge: 'Administrator', desc: 'System-wide procurement control center' },
+  officer: { badge: 'Officer',       desc: 'RFQ pipeline and buying activity' },
+  manager: { badge: 'Manager',       desc: 'Approval queue and decision center' },
+  vendor:  { badge: 'Vendor',        desc: 'RFQs, quotes, orders, and invoices' },
+  finance: { badge: 'Finance',       desc: 'Spend overview and invoice management' },
 };
 
-const DashboardHeader = ({ user, role }) => (
-  <section className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-[#6D5DFC] via-[#A855F7] to-[#22D3EE] px-7 py-8 text-white shadow-[0_24px_80px_rgba(109,93,252,0.28)]">
-    <div className="relative z-10 max-w-3xl">
-      <p className="text-sm font-bold uppercase tracking-[0.16em] text-white/75">{roleCopy[role] || 'ERP overview'}</p>
-      <h1 className="mt-3 text-3xl font-black tracking-normal sm:text-4xl">
-        Welcome back, {user?.name || 'User'}
-      </h1>
-      <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-white/82">
-        Live procurement intelligence from VendorBridge, tailored to your role and ready for the next workflow.
-      </p>
+const roleBadgeColors = {
+  admin:   { bg: '#FEE2E2', text: '#B91C1C' },
+  officer: { bg: '#DCFCE7', text: '#15803D' },
+  manager: { bg: '#FEF3C7', text: '#B45309' },
+  vendor:  { bg: '#DBEAFE', text: '#1D4ED8' },
+  finance: { bg: '#F3E8FF', text: '#7C3AED' },
+};
+
+const DashboardHeader = ({ user, role }) => {
+  const meta = roleMeta[role] || { badge: role, desc: 'ERP overview' };
+  const colors = roleBadgeColors[role] || { bg: '#F3F4F6', text: '#6B7280' };
+
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const today = new Date().toLocaleDateString('en-IN', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  return (
+    <div className="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <span
+            className="inline-flex items-center rounded-[4px] px-2 py-0.5 text-xs font-medium capitalize"
+            style={{ backgroundColor: colors.bg, color: colors.text }}
+          >
+            {meta.badge}
+          </span>
+          <span className="text-xs text-[#9CA3AF]">{today}</span>
+        </div>
+        <h1 className="text-xl font-semibold text-[#111827]">
+          {getGreeting()}, {user?.name?.split(' ')[0] || 'User'}
+        </h1>
+        <p className="mt-0.5 text-sm text-[#6B7280]">{meta.desc}</p>
+      </div>
     </div>
-    <div className="absolute right-8 top-8 hidden rounded-3xl border border-white/20 bg-white/15 px-5 py-4 backdrop-blur md:block">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/70">Role</p>
-      <p className="mt-1 text-xl font-black capitalize">{role}</p>
-    </div>
-  </section>
-);
+  );
+};
 
 export default DashboardHeader;

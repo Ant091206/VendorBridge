@@ -15,31 +15,39 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-  console.error('FATAL ERROR: JWT_SECRET environment variable is missing.');
+  console.error('FATAL: JWT_SECRET environment variable is not set.');
   process.exit(1);
 }
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-/**
- * Handle user registration (Sign Up)
- * Route: POST /api/auth/register
- *
- * Self-registration allows roles: officer, manager, vendor.
- * Admin accounts can only be created via the admin user management panel.
- */
-export const register = async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
+const validatePasswordStrength = (password) => {
+  if (!password || password.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters long.' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter.' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter.' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one number.' };
+  }
+  return { valid: true, message: '' };
+};
 
-    // Validate required inputs
+export const register = async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    const { name, email, phone, password, role, company, department, address } = req.body;
+
     if (!name || !email || !password || !role) {
       return res.status(400).json({
         status: 'error',
-        message: 'All fields (name, email, password, role) are required.'
+        message: 'Name, email, password, and role are required.'
       });
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -48,85 +56,123 @@ export const register = async (req, res) => {
       });
     }
 
-    // Validate password minimum length
-    if (password.length < 8) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Password must be at least 8 characters long.'
-      });
+    const pwCheck = validatePasswordStrength(password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ status: 'error', message: pwCheck.message });
     }
 
-    // Validate role — prevent self-registration as admin
-    const validRoles = ['officer', 'vendor', 'manager'];
+    const validRoles = ['officer', 'vendor', 'manager', 'finance', 'admin'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         status: 'error',
-        message: `Invalid role. Allowed roles for self-registration are: ${validRoles.join(', ')}`
+        message: `Invalid role. Allowed roles for registration are: ${validRoles.join(', ')}`
       });
     }
 
-    // Check for duplicate email
-    const [existingUsers] = await db.execute(
+    const [existingByEmail] = await conn.execute(
       'SELECT id FROM users WHERE email = ?',
       [email]
     );
-    if (existingUsers.length > 0) {
+    if (existingByEmail.length > 0) {
       return res.status(409).json({
         status: 'error',
         message: 'A user with this email address already exists.'
       });
     }
 
-    // Hash password
+    let phoneClean = null;
+    if (phone && phone.trim() !== '') {
+      phoneClean = phone.trim();
+      if (!/^\+?[\d\s\-().]{7,20}$/.test(phoneClean)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Please provide a valid phone number.'
+        });
+      }
+      const [existingByPhone] = await conn.execute(
+        'SELECT user_id FROM profiles WHERE phone = ?',
+        [phoneClean]
+      );
+      if (existingByPhone.length > 0) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'A user with this phone number already exists.'
+        });
+      }
+    }
+
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insert user into database
-    const [result] = await db.execute(
-      `INSERT INTO users (name, email, password_hash, role, status)
+    await conn.beginTransaction();
+
+    const [result] = await conn.execute(
+      `INSERT INTO users (full_name, email, password_hash, role, status)
        VALUES (?, ?, ?, ?, 'active')`,
-      [name, email, passwordHash, role]
+      [name.trim(), email.toLowerCase().trim(), passwordHash, role]
     );
 
     const newUserId = result.insertId;
 
-    // Generate JWT Token
+    await conn.execute(
+      `INSERT INTO profiles (user_id, phone, company, department, address)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        newUserId,
+        phoneClean,
+        company ? company.trim() : null,
+        department ? department.trim() : null,
+        address ? address.trim() : null
+      ]
+    );
+
+    await conn.commit();
+
     const payload = {
       id: newUserId,
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       role,
       status: 'active'
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
+    try {
+      await logAndNotify(newUserId, {
+        action: 'USER_REGISTERED',
+        module: 'Authentication',
+        entityType: 'user',
+        entityId: newUserId,
+        description: `New user ${name.trim()} registered with role: ${role}`,
+        ipAddress: req.ip
+      });
+    } catch (logErr) {
+      console.warn('Audit log failed (non-fatal):', logErr.message);
+    }
+
     return res.status(201).json({
       status: 'success',
-      message: 'User registered successfully.',
+      message: 'Account created successfully.',
       token,
       user: payload
     });
   } catch (error) {
+    await conn.rollback();
     console.error('Registration error:', error);
     return res.status(500).json({
       status: 'error',
       message: 'Internal server error occurred during registration.'
     });
+  } finally {
+    conn.release();
   }
 };
 
-/**
- * Handle user login (Sign In)
- * Route: POST /api/auth/login
- *
- * Validates credentials, checks account status, updates last_login timestamp.
- */
 export const login = async (req, res) => {
   try {
     const { email, password, rememberMe } = req.body;
 
-    // Validate required inputs
     if (!email || !password) {
       return res.status(400).json({
         status: 'error',
@@ -134,10 +180,9 @@ export const login = async (req, res) => {
       });
     }
 
-    // Fetch user from DB
     const [users] = await db.execute(
-      'SELECT * FROM users WHERE email = ?',
-      [email]
+      'SELECT id, full_name, email, password_hash, role, status FROM users WHERE email = ?',
+      [email.toLowerCase().trim()]
     );
     if (users.length === 0) {
       return res.status(401).json({
@@ -148,15 +193,19 @@ export const login = async (req, res) => {
 
     const user = users[0];
 
-    // Check account status
-    if (!user.status || user.status !== 'active') {
+    if (!user.status || user.status === 'inactive') {
       return res.status(403).json({
         status: 'error',
         message: 'Your account has been deactivated. Please contact an administrator.'
       });
     }
+    if (user.status === 'suspended') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Your account has been suspended. Please contact an administrator.'
+      });
+    }
 
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({
@@ -165,33 +214,37 @@ export const login = async (req, res) => {
       });
     }
 
-    // Update last_login timestamp
-    await db.execute(
-      'UPDATE users SET last_login = NOW() WHERE id = ?',
+    const [sessionResult] = await db.execute(
+      'INSERT INTO sessions (user_id, login_time) VALUES (?, NOW())',
       [user.id]
     );
+    const sessionId = sessionResult.insertId;
 
-    // Generate JWT Token — longer expiry if "remember me" is checked
+    // Longer token expiry when "remember me" is enabled
     const expiresIn = rememberMe ? '30d' : JWT_EXPIRES_IN;
     const payload = {
       id: user.id,
-      name: user.name,
+      name: user.full_name,
       email: user.email,
       role: user.role,
-      status: user.status
+      status: user.status,
+      sessionId
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn });
 
-    // Log Activity
-    await logAndNotify(user.id, {
-      action: 'USER_LOGGED_IN',
-      module: 'Authentication',
-      entityType: 'user',
-      entityId: user.id,
-      description: `User ${user.name} logged in successfully`,
-      ipAddress: req.ip
-    });
+    try {
+      await logAndNotify(user.id, {
+        action: 'USER_LOGGED_IN',
+        module: 'Authentication',
+        entityType: 'user',
+        entityId: user.id,
+        description: `User ${user.full_name} logged in successfully`,
+        ipAddress: req.ip
+      });
+    } catch (logErr) {
+      console.warn('Audit log failed (non-fatal):', logErr.message);
+    }
 
     return res.status(200).json({
       status: 'success',
@@ -208,27 +261,41 @@ export const login = async (req, res) => {
   }
 };
 
-/**
- * Handle user logout
- * Route: POST /api/auth/logout
- *
- * Since JWT is stateless, the server acknowledges the logout.
- * The client is responsible for clearing the stored token.
- */
 export const logout = async (req, res) => {
-  return res.status(200).json({
-    status: 'success',
-    message: 'Logged out successfully.'
-  });
+  try {
+    if (req.user) {
+      await db.execute(
+        'UPDATE sessions SET logout_time = NOW() WHERE user_id = ? AND logout_time IS NULL ORDER BY login_time DESC LIMIT 1',
+        [req.user.id]
+      );
+
+      try {
+        await logAndNotify(req.user.id, {
+          action: 'USER_LOGGED_OUT',
+          module: 'Authentication',
+          entityType: 'user',
+          entityId: req.user.id,
+          description: `User ${req.user.name} logged out`,
+          ipAddress: req.ip
+        });
+      } catch (logErr) {
+        console.warn('Audit log failed (non-fatal):', logErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Logged out successfully.'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Logout failed.'
+    });
+  }
 };
 
-/**
- * Handle forgot password request
- * Route: POST /api/auth/forgot-password
- *
- * Generates a password reset token and sends an email.
- * Always returns success to prevent email enumeration attacks.
- */
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -240,14 +307,13 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    // Lookup user
     const [users] = await db.execute(
-      'SELECT id, name, email, status FROM users WHERE email = ?',
-      [email]
+      'SELECT id, full_name as name, email, status FROM users WHERE email = ?',
+      [email.toLowerCase().trim()]
     );
 
-    // Always return the same response to prevent email enumeration
-    if (users.length === 0 || users[0].status !== 'active') {
+    // Always return success to prevent email enumeration
+    if (users.length === 0 || users[0].status === 'inactive' || users[0].status === 'suspended') {
       return res.status(200).json({
         status: 'success',
         message: 'If an account with that email exists, a password reset link has been sent.'
@@ -255,13 +321,22 @@ export const forgotPassword = async (req, res) => {
     }
 
     const user = users[0];
-
-    // Generate and store reset token
     const token = generateResetToken();
     await storeResetToken(user.id, token);
-
-    // Send reset email (logs to console in development)
     await sendPasswordResetEmail(user.email, user.name, token);
+
+    try {
+      await logAndNotify(user.id, {
+        action: 'PASSWORD_RESET_REQUESTED',
+        module: 'Authentication',
+        entityType: 'user',
+        entityId: user.id,
+        description: `Password reset requested for ${user.email}`,
+        ipAddress: req.ip
+      });
+    } catch (logErr) {
+      console.warn('Audit log failed (non-fatal):', logErr.message);
+    }
 
     return res.status(200).json({
       status: 'success',
@@ -276,21 +351,12 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-/**
- * Handle password reset
- * Route: POST /api/auth/reset-password
- *
- * Validates the reset token and updates the user's password.
- */
 export const resetPassword = async (req, res) => {
   try {
     const { token, password, confirmPassword } = req.body;
 
     if (!token) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Reset token is required.'
-      });
+      return res.status(400).json({ status: 'error', message: 'Reset token is required.' });
     }
 
     if (!password || !confirmPassword) {
@@ -300,21 +366,15 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Password must be at least 8 characters long.'
-      });
-    }
-
     if (password !== confirmPassword) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Passwords do not match.'
-      });
+      return res.status(400).json({ status: 'error', message: 'Passwords do not match.' });
     }
 
-    // Validate the reset token
+    const pwCheck = validatePasswordStrength(password);
+    if (!pwCheck.valid) {
+      return res.status(400).json({ status: 'error', message: pwCheck.message });
+    }
+
     const tokenRecord = await validateResetToken(token);
     if (!tokenRecord) {
       return res.status(400).json({
@@ -323,18 +383,28 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    // Hash the new password
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Update the user's password
     await db.execute(
       'UPDATE users SET password_hash = ? WHERE id = ?',
       [passwordHash, tokenRecord.user_id]
     );
 
-    // Invalidate the used token
     await invalidateResetToken(token);
+
+    try {
+      await logAndNotify(tokenRecord.user_id, {
+        action: 'PASSWORD_RESET_COMPLETED',
+        module: 'Authentication',
+        entityType: 'user',
+        entityId: tokenRecord.user_id,
+        description: 'Password was successfully reset via reset link',
+        ipAddress: req.ip
+      });
+    } catch (logErr) {
+      console.warn('Audit log failed (non-fatal):', logErr.message);
+    }
 
     return res.status(200).json({
       status: 'success',

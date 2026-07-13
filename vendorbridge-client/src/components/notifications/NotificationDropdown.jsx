@@ -25,7 +25,7 @@ const NotificationDropdown = ({
         <div>
           <h4 className="text-sm font-black text-slate-950">Notifications</h4>
           {unreadCount > 0 && (
-            <p className="text-[11px] text-[#6D5DFC] font-bold mt-0.5">
+            <p className="text-[11px] text-[#22C55E] font-bold mt-0.5">
               You have {unreadCount} unread message{unreadCount !== 1 ? 's' : ''}
             </p>
           )}
@@ -33,7 +33,7 @@ const NotificationDropdown = ({
         {unreadCount > 0 && (
           <button
             onClick={onMarkAllRead}
-            className="flex items-center gap-1.5 rounded-xl border border-indigo-100 bg-indigo-50/50 px-2.5 py-1.5 text-xs font-bold text-[#6D5DFC] transition hover:bg-[#6D5DFC] hover:text-white"
+            className="flex items-center gap-1.5 rounded-xl border border-indigo-100 bg-green-50/50 px-2.5 py-1.5 text-xs font-bold text-[#22C55E] transition hover:bg-[#22C55E] hover:text-white"
           >
             <Check size={13} />
             <span>Mark all read</span>
@@ -68,7 +68,7 @@ const NotificationDropdown = ({
       <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 text-center">
         <button
           onClick={handleViewAll}
-          className="w-full text-xs font-bold text-[#6D5DFC] transition hover:text-[#A855F7]"
+          className="w-full text-xs font-bold text-[#22C55E] transition hover:text-[#16A34A]"
         >
           View All Notifications →
         </button>

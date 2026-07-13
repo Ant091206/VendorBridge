@@ -1,94 +1,58 @@
-import axiosInstance from './axios';
+import api from './axios';
 
-/**
- * Generate a new invoice from a Purchase Order.
- * @param {number|string} poId - PO ID
- */
-export const generateInvoice = async (poId) => {
-  try {
-    const response = await axiosInstance.post(`/invoices/generate/${poId}`);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error(`Failed to generate invoice for PO ID: ${poId}`);
-  }
+export const createInvoice = (data) =>
+  api.post('/invoices', data).then((r) => r.data);
+
+export const getAllInvoices = (params = {}) =>
+  api.get('/invoices', { params }).then((r) => r.data);
+
+export const getInvoiceById = (id) =>
+  api.get(`/invoices/${id}`).then((r) => r.data);
+
+export const updateInvoice = (id, data) =>
+  api.put(`/invoices/${id}`, data).then((r) => r.data);
+
+export const deleteInvoice = (id) =>
+  api.delete(`/invoices/${id}`).then((r) => r.data);
+
+export const generateInvoice = (id) =>
+  api.patch(`/invoices/${id}/generate`).then((r) => r.data);
+
+export const cancelInvoice = (id, remarks) =>
+  api.patch(`/invoices/${id}/cancel`, { remarks }).then((r) => r.data);
+
+export const markInvoicePaid = (id, data) =>
+  api.patch(`/invoices/${id}/mark-paid`, data).then((r) => r.data);
+
+export const downloadInvoicePDF = async (id, invoiceNumber) => {
+  const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(
+    new Blob([response.data], { type: 'application/pdf' })
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${invoiceNumber}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };
 
-/**
- * Fetch all invoices in the system.
- * @param {object} params - Optional search/filter parameters (e.g. { status: 'generated', search: 'INV-2026-0001' })
- */
-export const getAllInvoices = async (params) => {
-  try {
-    const response = await axiosInstance.get('/invoices', { params });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve invoices.');
-  }
+export const getInvoicePDFBlobUrl = async (id) => {
+  const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
+  return window.URL.createObjectURL(
+    new Blob([response.data], { type: 'application/pdf' })
+  );
 };
 
-/**
- * Fetch detailed information for a single invoice.
- * @param {number|string} id - Invoice ID
- */
-export const getInvoiceById = async (id) => {
-  try {
-    const response = await axiosInstance.get(`/invoices/${id}`);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error(`Failed to retrieve invoice ID: ${id}`);
-  }
-};
+export const sendInvoiceEmail = (id) =>
+  api.post(`/invoices/${id}/send-email`).then((r) => r.data);
 
-/**
- * Download the generated invoice PDF as binary data.
- * @param {number|string} id - Invoice ID
- */
-export const downloadPDF = async (id) => {
-  try {
-    const response = await axiosInstance.get(`/invoices/${id}/pdf`, {
-      responseType: 'blob'
-    });
-    return response.data; // This returns the Blob directly
-  } catch (error) {
-    throw error.response?.data || new Error(`Failed to download invoice PDF for ID: ${id}`);
-  }
-};
+export const getInvoiceHistory = (id) =>
+  api.get(`/invoices/${id}/history`).then((r) => r.data);
 
-/**
- * Dispatches the invoice PDF via email to the assigned vendor.
- * @param {number|string} id - Invoice ID
- */
-export const sendInvoiceEmail = async (id) => {
-  try {
-    const response = await axiosInstance.post(`/invoices/${id}/send-email`);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error(`Failed to email invoice ID: ${id}`);
-  }
-};
+export const getEmailHistory = (id) =>
+  api.get(`/invoices/${id}/email-history`).then((r) => r.data);
 
-/**
- * Updates the invoice status (e.g., to 'paid').
- * @param {number|string} id - Invoice ID
- * @param {string} status - Target status ('sent' or 'paid')
- */
-export const updateInvoiceStatus = async (id, status) => {
-  try {
-    const response = await axiosInstance.put(`/invoices/${id}/status`, { status });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error(`Failed to update status for invoice ID: ${id}`);
-  }
-};
-
-/**
- * Fetch invoices belonging to the logged-in vendor supplier.
- */
-export const getMyInvoices = async () => {
-  try {
-    const response = await axiosInstance.get('/invoices/vendor/my-invoices');
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || new Error('Failed to retrieve vendor invoices.');
-  }
-};
+export const getMyInvoices = (params = {}) =>
+  api.get('/invoices/vendor/my-invoices', { params }).then((r) => r.data);

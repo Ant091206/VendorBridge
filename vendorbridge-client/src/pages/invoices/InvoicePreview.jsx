@@ -80,7 +80,7 @@ const InvoicePreview = () => {
       <div className="mx-auto max-w-4xl mb-6 flex items-center justify-between bg-white border border-slate-200 p-4 rounded-2xl shadow-sm print:hidden">
         <div className="flex items-center gap-2">
           <span className="text-xs font-black text-slate-500 uppercase">Invoice Preview:</span>
-          <span className="font-mono text-xs font-black text-[#6D5DFC] bg-indigo-50 px-2.5 py-1 rounded-lg">
+          <span className="font-mono text-xs font-black text-[#22C55E] bg-green-50 px-2.5 py-1 rounded-lg">
             {invoice.invoice_number}
           </span>
         </div>
@@ -95,7 +95,7 @@ const InvoicePreview = () => {
           
           <button
             onClick={() => window.print()}
-            className="rounded-xl bg-[#6D5DFC] hover:bg-[#5b4deb] px-4 py-2 text-xs font-black text-white shadow-md shadow-indigo-500/10 cursor-pointer flex items-center gap-1.5"
+            className="rounded-xl bg-[#22C55E] hover:bg-[#16A34A] px-4 py-2 text-xs font-black text-white shadow-md shadow-green-500/10 cursor-pointer flex items-center gap-1.5"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -112,7 +112,7 @@ const InvoicePreview = () => {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 pb-6 border-b border-slate-200 print:border-slate-300">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-[#6D5DFC] flex items-center justify-center text-white font-bold text-lg print:bg-black">
+              <div className="h-8 w-8 rounded-lg bg-[#22C55E] flex items-center justify-center text-white font-bold text-lg print:bg-black">
                 VB
               </div>
               <span className="text-xl font-black tracking-tight text-slate-950 print:text-black">VendorBridge ERP</span>
@@ -123,8 +123,8 @@ const InvoicePreview = () => {
           
           <div className="text-left sm:text-right space-y-1.5">
             <h1 className="text-2xl font-black text-slate-950 tracking-widest uppercase print:text-black">Tax Invoice</h1>
-            <div className="font-mono text-sm font-bold text-[#6D5DFC] print:text-black">{invoice.invoice_number}</div>
-            <span className="inline-flex rounded-lg bg-indigo-50 border border-indigo-150 text-[#6D5DFC] font-black uppercase text-[10px] px-2.5 py-1 tracking-wider print:bg-white print:text-black">
+            <div className="font-mono text-sm font-bold text-[#22C55E] print:text-black">{invoice.invoice_number}</div>
+            <span className="inline-flex rounded-lg bg-green-50 border border-indigo-150 text-[#22C55E] font-black uppercase text-[10px] px-2.5 py-1 tracking-wider print:bg-white print:text-black">
               {invoice.status}
             </span>
           </div>

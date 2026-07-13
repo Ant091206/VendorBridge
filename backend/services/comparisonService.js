@@ -1,11 +1,15 @@
 import db from '../config/db.js';
 import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
-import { sendEmail } from './emailService.js';
 
-export const getRFQComparisonData = async (rfqId, user) => {
+/**
+ * Retrieves RFQ and quotation comparison data.
+ * Supports server-side sorting, filtering, and pagination.
+ * Computes Lowest Price and Fastest Delivery badges globally across participating quotes.
+ */
+export const getComparisonData = async (rfqId, query = {}, user) => {
   // 1. Fetch RFQ details
   const [rfqRows] = await db.execute(
-    `SELECT id, rfq_number, title, quantity, status, deadline, estimated_budget 
+    `SELECT id, rfq_number, title, description, status, submission_deadline, created_at
      FROM rfqs WHERE id = ?`,
     [rfqId]
   );
@@ -15,262 +19,379 @@ export const getRFQComparisonData = async (rfqId, user) => {
     error.statusCode = 404;
     throw error;
   }
-
   const rfq = rfqRows[0];
 
-  // 2. Fetch all quotations for the RFQ (excluding drafts)
-  const [quotations] = await db.execute(
+  // 2. Fetch all eligible quotations for the RFQ (excluding drafts/withdrawn) to calculate badges globally
+  const [allQuotes] = await db.execute(
     `SELECT 
        q.id,
        q.quotation_number,
        q.rfq_id,
        q.vendor_id,
        v.name AS vendor_name,
-       v.email AS vendor_email,
-       COALESCE(v.company_name, v.name) AS vendor_company,
-       q.unit_price,
-       q.quantity,
-       q.total_price,
+       v.status AS vendor_status,
+       q.subtotal,
+       q.tax_amount,
+       q.discount_amount,
+       q.grand_total,
        q.delivery_days,
        q.notes,
-       q.attachment_url,
-       q.status,
-       q.submitted_at
+       q.status AS quotation_status,
+       q.submission_date,
+       q.created_at
      FROM quotations q
      JOIN vendors v ON q.vendor_id = v.id
-     WHERE q.rfq_id = ? AND q.status != 'draft'
-     ORDER BY q.submitted_at DESC`,
+     WHERE q.rfq_id = ? AND q.status NOT IN ('draft', 'withdrawn')`,
     [rfqId]
   );
 
-  // 3. Compute Highlight Badges (Lowest Price, Fastest Delivery, Best Value)
-  if (quotations.length > 0) {
-    const minPrice = Math.min(...quotations.map(q => Number(q.total_price)));
-    const minDelivery = Math.min(...quotations.map(q => Number(q.delivery_days)));
+  // Check comparison eligibility rules:
+  // RFQ status = Published (open) or Closed
+  // At least 2 quotations exist
+  const isValidRFQStatus = ['open', 'published', 'closed'].includes(rfq.status);
+  const hasAtLeastTwoQuotes = allQuotes.length >= 2;
+  const eligible = isValidRFQStatus && hasAtLeastTwoQuotes;
 
-    // Calculate Ranks for Best Value: Score = 0.6 * PriceRank + 0.4 * DeliveryRank
-    const sortedByPrice = [...quotations].sort((a, b) => Number(a.total_price) - Number(b.total_price));
-    const sortedByDelivery = [...quotations].sort((a, b) => Number(a.delivery_days) - Number(b.delivery_days));
+  let message = '';
+  if (!isValidRFQStatus) {
+    message = 'RFQ must be in Published (Open) or Closed status to compare quotations.';
+  } else if (!hasAtLeastTwoQuotes) {
+    message = `Quotation comparison requires at least 2 submitted quotations. Currently, there are only ${allQuotes.length} submitted.`;
+  }
 
-    const priceRanks = new Map();
-    sortedByPrice.forEach((q, index) => {
-      // Handle duplicates by assigning the same rank
-      if (index > 0 && Number(q.total_price) === Number(sortedByPrice[index - 1].total_price)) {
-        priceRanks.set(q.id, priceRanks.get(sortedByPrice[index - 1].id));
-      } else {
-        priceRanks.set(q.id, index + 1);
-      }
-    });
+  // Calculate lowest price and fastest delivery badges globally across all participating quotations
+  if (allQuotes.length > 0) {
+    const minPrice = Math.min(...allQuotes.map(q => Number(q.grand_total)));
+    const minDelivery = Math.min(...allQuotes.map(q => Number(q.delivery_days)));
 
-    const deliveryRanks = new Map();
-    sortedByDelivery.forEach((q, index) => {
-      if (index > 0 && Number(q.delivery_days) === Number(sortedByDelivery[index - 1].delivery_days)) {
-        deliveryRanks.set(q.id, deliveryRanks.get(sortedByDelivery[index - 1].id));
-      } else {
-        deliveryRanks.set(q.id, index + 1);
-      }
-    });
-
-    let bestValueQuoteId = null;
-    let lowestScore = Infinity;
-
-    quotations.forEach(q => {
-      const pRank = priceRanks.get(q.id) || 1;
-      const dRank = deliveryRanks.get(q.id) || 1;
-      const score = (0.6 * pRank) + (0.4 * dRank);
-      
-      if (score < lowestScore) {
-        lowestScore = score;
-        bestValueQuoteId = q.id;
-      }
-    });
-
-    quotations.forEach(q => {
-      q.is_lowest_price = Number(q.total_price) === minPrice;
+    allQuotes.forEach(q => {
+      q.is_lowest_price = Number(q.grand_total) === minPrice;
       q.is_fastest_delivery = Number(q.delivery_days) === minDelivery;
-      q.is_best_value = q.id === bestValueQuoteId;
+      // Future rating & performance metrics placeholders
+      q.vendor_rating = null;
+      q.vendor_performance_metrics = null;
     });
   }
 
-  // 4. Fetch comparison if already selected
-  const [selectedRows] = await db.execute(
-    `SELECT qc.*, u.name AS selected_by_name
-     FROM quotation_comparisons qc
-     JOIN users u ON qc.selected_by = u.id
-     WHERE qc.rfq_id = ? LIMIT 1`,
+  // 3. Apply Filters in memory
+  let filteredQuotes = [...allQuotes];
+
+  if (query.status) {
+    filteredQuotes = filteredQuotes.filter(q => q.quotation_status === query.status);
+  }
+  if (query.vendor_status) {
+    filteredQuotes = filteredQuotes.filter(q => q.vendor_status === query.vendor_status);
+  }
+  if (query.min_price !== undefined && query.min_price !== '') {
+    filteredQuotes = filteredQuotes.filter(q => Number(q.grand_total) >= Number(query.min_price));
+  }
+  if (query.max_price !== undefined && query.max_price !== '') {
+    filteredQuotes = filteredQuotes.filter(q => Number(q.grand_total) <= Number(query.max_price));
+  }
+  if (query.min_delivery !== undefined && query.min_delivery !== '') {
+    filteredQuotes = filteredQuotes.filter(q => q.delivery_days >= Number(query.min_delivery));
+  }
+  if (query.max_delivery !== undefined && query.max_delivery !== '') {
+    filteredQuotes = filteredQuotes.filter(q => q.delivery_days <= Number(query.max_delivery));
+  }
+
+  // 4. Apply Sorting
+  const sort = query.sort || 'price_asc';
+  filteredQuotes.sort((a, b) => {
+    switch (sort) {
+      case 'price_asc':
+        return Number(a.grand_total) - Number(b.grand_total);
+      case 'price_desc':
+        return Number(b.grand_total) - Number(a.grand_total);
+      case 'delivery_asc':
+        return a.delivery_days - b.delivery_days;
+      case 'delivery_desc':
+        return b.delivery_days - a.delivery_days;
+      case 'date_desc':
+        return new Date(b.submission_date || b.created_at) - new Date(a.submission_date || a.created_at);
+      case 'date_asc':
+        return new Date(a.submission_date || a.created_at) - new Date(b.submission_date || b.created_at);
+      case 'vendor_name':
+        return a.vendor_name.localeCompare(b.vendor_name);
+      default:
+        return Number(a.grand_total) - Number(b.grand_total);
+    }
+  });
+
+  // 5. Apply Pagination
+  const page = Math.max(Number(query.page) || 1, 1);
+  const limit = Math.max(Number(query.limit) || 10, 1);
+  const offset = (page - 1) * limit;
+  const paginatedQuotes = filteredQuotes.slice(offset, offset + limit);
+
+  // 6. Fetch selection recommendation if it exists
+  const [selectionRows] = await db.execute(
+    `SELECT qs.*, u.name AS selected_by_name, q.quotation_number, v.name AS vendor_name, q.grand_total, q.delivery_days
+     FROM quotation_selections qs
+     JOIN users u ON qs.selected_by = u.id
+     JOIN quotations q ON qs.quotation_id = q.id
+     JOIN vendors v ON q.vendor_id = v.id
+     WHERE qs.rfq_id = ? LIMIT 1`,
     [rfqId]
   );
 
   return {
     rfq,
-    quotations,
-    selection: selectedRows[0] || null
+    eligible,
+    message,
+    total_quotes_count: allQuotes.length,
+    filtered_quotes_count: filteredQuotes.length,
+    quotations: paginatedQuotes,
+    selection: selectionRows[0] || null,
+    pagination: {
+      page,
+      limit,
+      total: filteredQuotes.length,
+      total_pages: Math.ceil(filteredQuotes.length / limit)
+    }
   };
 };
 
-export const selectWinningVendor = async (rfqId, payload, user) => {
-  const { selected_quotation_id, selection_reason } = payload;
+/**
+ * Log when a Procurement Officer or Admin views the comparison details.
+ */
+export const logComparisonEvent = async (rfqId, userId) => {
+  const [rfqRows] = await db.execute('SELECT id FROM rfqs WHERE id = ?', [rfqId]);
+  if (rfqRows.length === 0) {
+    const error = new Error('RFQ not found.');
+    error.statusCode = 404;
+    throw error;
+  }
 
-  if (!selected_quotation_id || !selection_reason?.trim()) {
-    const error = new Error('Selected quotation ID and selection reason are required.');
+  await db.execute(
+    `INSERT INTO quotation_comparisons (rfq_id, compared_by) VALUES (?, ?)`,
+    [rfqId, userId]
+  );
+
+  // Log in Activity Logs
+  await logAndNotify(userId, {
+    action: 'COMPARISON_VIEWED',
+    module: 'Quotation Comparison',
+    entityType: 'rfq',
+    entityId: rfqId,
+    description: `Quotation comparison viewed for RFQ #${rfqId}`,
+    ipAddress: null
+  });
+
+  return { success: true };
+};
+
+/**
+ * Creates a quotation selection (recommendation) for an RFQ.
+ */
+export const createQuotationSelection = async (payload, userId) => {
+  const { rfq_id, quotation_id, selection_reason } = payload;
+
+  if (!rfq_id || !quotation_id || !selection_reason?.trim()) {
+    const error = new Error('RFQ ID, quotation ID, and selection reason are required.');
     error.statusCode = 400;
     throw error;
   }
 
   // 1. Retrieve and validate RFQ
-  const [rfqRows] = await db.execute('SELECT status, title FROM rfqs WHERE id = ?', [rfqId]);
+  const [rfqRows] = await db.execute('SELECT status, title FROM rfqs WHERE id = ?', [rfq_id]);
   if (rfqRows.length === 0) {
     const error = new Error('RFQ not found.');
     error.statusCode = 404;
     throw error;
   }
   const rfq = rfqRows[0];
-  if (rfq.status !== 'open') {
+  if (!['open', 'published', 'closed'].includes(rfq.status)) {
     const error = new Error(`RFQ selection is blocked. The RFQ status is: ${rfq.status}`);
     error.statusCode = 400;
     throw error;
   }
 
-  // 2. Retrieve and validate quotation
+  // 2. Validate comparison conditions: minimum 2 submitted quotations
+  const [allQuotes] = await db.execute(
+    `SELECT id FROM quotations WHERE rfq_id = ? AND status NOT IN ('draft', 'withdrawn')`,
+    [rfq_id]
+  );
+  if (allQuotes.length < 2) {
+    const error = new Error('Quotation selection requires at least 2 submitted quotations for comparison.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 3. Retrieve and validate the target quotation
   const [quoteRows] = await db.execute(
     `SELECT q.*, v.name AS vendor_name, v.email AS vendor_email 
      FROM quotations q 
      JOIN vendors v ON q.vendor_id = v.id 
-     WHERE q.id = ? AND q.rfq_id = ?`,
-    [selected_quotation_id, rfqId]
+     WHERE q.id = ? AND q.rfq_id = ? AND q.status NOT IN ('draft', 'withdrawn')`,
+    [quotation_id, rfq_id]
   );
   if (quoteRows.length === 0) {
-    const error = new Error('Quotation not found or does not belong to this RFQ.');
+    const error = new Error('Quotation not found, is draft/withdrawn, or does not belong to this RFQ.');
     error.statusCode = 404;
     throw error;
   }
-  const selectedQuote = quoteRows[0];
+
+  // 4. Verify unique selection per RFQ
+  const [existingSelection] = await db.execute(
+    `SELECT id FROM quotation_selections WHERE rfq_id = ?`,
+    [rfq_id]
+  );
+  if (existingSelection.length > 0) {
+    const error = new Error('A quotation selection has already been recommended for this RFQ.');
+    error.statusCode = 400;
+    throw error;
+  }
 
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
 
-    // A. Update winning quotation to 'selected'
-    await conn.execute("UPDATE quotations SET status = 'selected' WHERE id = ?", [selected_quotation_id]);
+    // A. Update target quotation status to 'selected'
+    await conn.execute("UPDATE quotations SET status = 'selected' WHERE id = ?", [quotation_id]);
 
-    // B. Set other bids to 'rejected'
-    await conn.execute("UPDATE quotations SET status = 'rejected' WHERE rfq_id = ? AND id != ?", [rfqId, selected_quotation_id]);
-
-    // C. Close RFQ status
-    await conn.execute("UPDATE rfqs SET status = 'closed' WHERE id = ?", [rfqId]);
-
-    // D. Insert into quotation_comparisons
-    await conn.execute(
-      `INSERT INTO quotation_comparisons (rfq_id, selected_quotation_id, selected_by, selection_reason, selected_at)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [rfqId, selected_quotation_id, user.id, selection_reason]
+    // B. Create selection entry in quotation_selections with status 'Recommended'
+    const [result] = await conn.execute(
+      `INSERT INTO quotation_selections (rfq_id, quotation_id, selected_by, selection_reason, status)
+       VALUES (?, ?, ?, ?, 'Recommended')`,
+      [rfq_id, quotation_id, userId, selection_reason.trim()]
     );
+    const selectionId = result.insertId;
 
-    // E. Create pending approval workflow entry
-    const approvalSql = `
-      INSERT INTO approvals (quotation_id, approver_id, decision, remarks, decided_at)
-      VALUES (?, ?, 'pending', ?, NULL)
-    `;
-    const [apprResult] = await conn.execute(approvalSql, [selected_quotation_id, user.id, selection_reason]);
-    const approvalId = apprResult.insertId;
-
-    // F. Log activity audits & Dispatch Notifications
-    await logAndNotify(user.id, {
-      action: 'APPROVAL_REQUESTED',
-      module: 'Approval Workflow',
-      entityType: 'approval',
-      entityId: approvalId,
-      description: `Quotation approval requested for RFQ #${rfqId}`,
-      ipAddress: null
-    });
-
-    await logAndNotify(user.id, {
-      action: 'QUOTATION_SELECTED',
-      module: 'Quotation Management',
-      entityType: 'quotation',
-      entityId: selected_quotation_id,
-      description: `Quotation selected for RFQ #${rfqId}`,
-      ipAddress: null
-    });
-
-    await logAndNotify(user.id, {
-      action: 'RFQ_CLOSED',
-      module: 'RFQ Management',
-      entityType: 'rfq',
-      entityId: rfqId,
-      description: `RFQ closed due to selection`,
+    // C. Log activity audit
+    await logAndNotify(userId, {
+      action: 'VENDOR_SELECTED',
+      module: 'Quotation Comparison',
+      entityType: 'quotation_selection',
+      entityId: selectionId,
+      description: `Quotation recommended/selected for RFQ #${rfq_id}. Reason: ${selection_reason}`,
       ipAddress: null
     });
 
     await conn.commit();
     conn.release();
 
-    // Asynchronously dispatch emails in the background
-    const rfqTitle = rfq.title;
-    const winnerName = selectedQuote.vendor_name;
-    const winnerEmail = selectedQuote.vendor_email;
-
-    // Send Winner Email
-    const winSubject = 'Your Quotation Has Been Selected — VendorBridge';
-    const winHtml = `
-      <div style="font-family: Arial, sans-serif; color: #333; max-width: 650px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; padding: 25px;">
-        <h2 style="color: #10b981; border-bottom: 2px solid #10b981; padding-bottom: 12px; margin-top: 0;">Award Notification</h2>
-        <p>Dear <strong>${winnerName}</strong>,</p>
-        <p>Congratulations! Your quotation for the following RFQ has been successfully selected:</p>
-        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 15px; margin: 20px 0;">
-          <strong>RFQ Title:</strong> ${rfqTitle}<br>
-          <strong>Quotation #:</strong> ${selectedQuote.quotation_number || 'N/A'}<br>
-          <strong>Unit Price:</strong> ₹ ${Number(selectedQuote.unit_price).toLocaleString('en-IN')}<br>
-          <strong>Delivery Days:</strong> ${selectedQuote.delivery_days} days
-        </div>
-        <p>An approval request has been initiated with the management team. You will be notified once the Purchase Order is generated.</p>
-        <p style="margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 15px; font-size: 11px; color: #64748b;">
-          Regards,<br><strong>VendorBridge Procurement Team</strong>
-        </p>
-      </div>
-    `;
-    sendEmail(winnerEmail, winSubject, winHtml).catch(err => console.error('Winner notification failed:', err));
-
-    // Fetch and Notify Rejected Vendors
-    const [rejectedQuotes] = await db.execute(
-      `SELECT DISTINCT v.name, v.email
-       FROM quotations q
-       JOIN vendors v ON q.vendor_id = v.id
-       WHERE q.rfq_id = ? AND q.id != ?`,
-      [rfqId, selected_quotation_id]
-    );
-
-    const rejectSubject = 'Quotation Update — VendorBridge';
-    rejectedQuotes.forEach(vendor => {
-      const rejectHtml = `
-        <div style="font-family: Arial, sans-serif; color: #333; max-width: 650px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; padding: 25px;">
-          <h2 style="color: #64748b; border-bottom: 2px solid #64748b; padding-bottom: 12px; margin-top: 0;">Bidding Registry Update</h2>
-          <p>Dear <strong>${vendor.name}</strong>,</p>
-          <p>Thank you for submitting your quotation for the Request for Quotation: <strong>${rfqTitle}</strong>.</p>
-          <p>After careful review of all submissions, we have selected another vendor for this requirement.</p>
-          <p>We look forward to working with you on future bidding opportunities.</p>
-          <p style="margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 15px; font-size: 11px; color: #64748b;">
-            Regards,<br><strong>VendorBridge Procurement Team</strong>
-          </p>
-        </div>
-      `;
-      sendEmail(vendor.email, rejectSubject, rejectHtml).catch(err => console.error('Rejected notification failed:', err));
-    });
-
     return {
-      success: true,
-      message: 'Vendor selected successfully and approval workflow triggered.',
-      data: {
-        rfq_id: rfqId,
-        selected_quotation_id,
-        status: 'selected'
-      }
+      id: selectionId,
+      rfq_id,
+      quotation_id,
+      selected_by: userId,
+      selection_reason: selection_reason.trim(),
+      status: 'Recommended'
     };
   } catch (error) {
-    if (conn) {
-      await conn.rollback();
-      conn.release();
-    }
+    await conn.rollback();
+    conn.release();
     throw error;
   }
+};
+
+/**
+ * Fetch selection recommendation for a given RFQ.
+ */
+export const getQuotationSelectionByRFQ = async (rfqId) => {
+  const [selectionRows] = await db.execute(
+    `SELECT qs.*, u.name AS selected_by_name, q.quotation_number, v.name AS vendor_name, q.grand_total, q.delivery_days
+     FROM quotation_selections qs
+     JOIN users u ON qs.selected_by = u.id
+     JOIN quotations q ON qs.quotation_id = q.id
+     JOIN vendors v ON q.vendor_id = v.id
+     WHERE qs.rfq_id = ? LIMIT 1`,
+    [rfqId]
+  );
+  return selectionRows[0] || null;
+};
+
+/**
+ * Update selection status (e.g. Recommended -> SentForApproval) or update remarks.
+ */
+export const updateQuotationSelectionStatus = async (selectionId, status, payload = {}, userId) => {
+  const { selection_reason } = payload;
+
+  const [selections] = await db.execute(
+    `SELECT * FROM quotation_selections WHERE id = ?`,
+    [selectionId]
+  );
+  if (selections.length === 0) {
+    const error = new Error('Quotation selection not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const selection = selections[0];
+
+  const allowedStatuses = ['Recommended', 'SentForApproval', 'Approved', 'Rejected'];
+  if (status && !allowedStatuses.includes(status)) {
+    const error = new Error(`Invalid status. Must be one of: ${allowedStatuses.join(', ')}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updates = [];
+  const params = [];
+
+  if (status) {
+    updates.push('status = ?');
+    params.push(status);
+  }
+  if (selection_reason !== undefined) {
+    updates.push('selection_reason = ?');
+    params.push(selection_reason.trim());
+  }
+
+  if (updates.length === 0) {
+    return selection;
+  }
+
+  params.push(selectionId);
+  await db.execute(
+    `UPDATE quotation_selections SET ${updates.join(', ')} WHERE id = ?`,
+    params
+  );
+
+  if (status) {
+    await logAndNotify(userId, {
+      action: 'SELECTION_STATUS_UPDATED',
+      module: 'Quotation Comparison',
+      entityType: 'quotation_selection',
+      entityId: selectionId,
+      description: `Quotation selection status updated to "${status}"`,
+      ipAddress: null
+    });
+  }
+
+  const [updated] = await db.execute(
+    `SELECT qs.*, u.name AS selected_by_name, q.quotation_number, v.name AS vendor_name, q.grand_total, q.delivery_days
+     FROM quotation_selections qs
+     JOIN users u ON qs.selected_by = u.id
+     JOIN quotations q ON qs.quotation_id = q.id
+     JOIN vendors v ON q.vendor_id = v.id
+     WHERE qs.id = ? LIMIT 1`,
+    [selectionId]
+  );
+
+  return updated[0];
+};
+
+/**
+ * Fetch comparison audit log and selection changes.
+ */
+export const getComparisonHistory = async (rfqId) => {
+  const [views] = await db.execute(
+    `SELECT 'comparison_viewed' AS type, qc.id, qc.compared_by AS user_id, u.name AS user_name, u.role AS user_role, qc.comparison_date AS event_date, NULL AS details, NULL AS status
+     FROM quotation_comparisons qc
+     JOIN users u ON qc.compared_by = u.id
+     WHERE qc.rfq_id = ?`,
+    [rfqId]
+  );
+
+  const [selections] = await db.execute(
+    `SELECT 'vendor_selected' AS type, qs.id, qs.selected_by AS user_id, u.name AS user_name, u.role AS user_role, qs.selection_date AS event_date, qs.selection_reason AS details, qs.status
+     FROM quotation_selections qs
+     JOIN users u ON qs.selected_by = u.id
+     WHERE qs.rfq_id = ?`,
+    [rfqId]
+  );
+
+  const history = [...views, ...selections].sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
+  return history;
 };

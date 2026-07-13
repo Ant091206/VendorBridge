@@ -3,9 +3,12 @@ import {
   createVendorRecord,
   deleteCategoryRecord,
   deleteVendorRecord,
+  generateVendorCode,
+  getCategoryById,
   getVendor,
   listCategories,
   listVendors,
+  patchVendorStatus,
   updateCategoryRecord,
   updateVendorRecord
 } from '../services/vendorService.js';
@@ -82,7 +85,21 @@ export const updateVendor = async (req, res) => {
       return res.status(400).json({ status: 'error', message: errors[0], errors });
     }
 
+    const oldVendor = await getVendor(req.params.id, req.user);
     const vendor = await updateVendorRecord(req.params.id, req.body, req.user);
+
+    // Log Activity & Dispatch Notifications
+    await logAndNotify(req.user.id, {
+      action: 'VENDOR_UPDATED',
+      module: 'Vendor Management',
+      entityType: 'vendor',
+      entityId: vendor.id,
+      description: `Vendor "${vendor.vendor_name || vendor.name}" profile updated`,
+      ipAddress: req.ip,
+      oldValue: oldVendor,
+      newValue: vendor
+    });
+
     return res.status(200).json({
       status: 'success',
       message: 'Vendor updated successfully.',
@@ -96,7 +113,22 @@ export const updateVendor = async (req, res) => {
 
 export const deleteVendor = async (req, res) => {
   try {
-    await deleteVendorRecord(req.params.id);
+    const existing = await getVendor(req.params.id, req.user);
+    if (!existing) {
+      return res.status(404).json({ status: 'error', message: 'Vendor not found.' });
+    }
+    await deleteVendorRecord(req.params.id, req.user.id);
+
+    // Log Activity & Dispatch Notifications
+    await logAndNotify(req.user.id, {
+      action: 'VENDOR_DELETED',
+      module: 'Vendor Management',
+      entityType: 'vendor',
+      entityId: Number(req.params.id),
+      description: `Vendor "${existing.vendor_name || existing.name}" archived`,
+      ipAddress: req.ip
+    });
+
     return res.status(200).json({
       status: 'success',
       message: 'Vendor archived successfully.'
@@ -107,6 +139,52 @@ export const deleteVendor = async (req, res) => {
   }
 };
 
+export const patchVendorStatusController = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status || !['active', 'inactive', 'blacklisted'].includes(status)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid or missing status.' });
+    }
+
+    const oldVendor = await getVendor(req.params.id, req.user);
+    const vendor = await patchVendorStatus(req.params.id, status, req.user.id, req.user);
+
+    // Log Activity & Dispatch Notifications
+    await logAndNotify(req.user.id, {
+      action: 'VENDOR_STATUS_CHANGED',
+      module: 'Vendor Management',
+      entityType: 'vendor',
+      entityId: vendor.id,
+      description: `Vendor "${vendor.vendor_name || vendor.name}" status updated to ${status}`,
+      ipAddress: req.ip,
+      oldValue: oldVendor,
+      newValue: vendor
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Vendor status updated successfully.',
+      data: vendor
+    });
+  } catch (error) {
+    console.error('Error patching vendor status:', error);
+    return fail(res, error, 'Failed to update vendor status.');
+  }
+};
+
+export const generateCode = async (req, res) => {
+  try {
+    const code = await generateVendorCode();
+    return res.status(200).json({
+      status: 'success',
+      data: { vendor_code: code }
+    });
+  } catch (error) {
+    console.error('Error generating vendor code:', error);
+    return fail(res, error, 'Failed to generate vendor code.');
+  }
+};
+
 export const getAllCategories = async (req, res) => {
   try {
     const categories = await listCategories();
@@ -114,6 +192,19 @@ export const getAllCategories = async (req, res) => {
   } catch (error) {
     console.error('Error fetching categories:', error);
     return fail(res, error, 'Failed to retrieve categories.');
+  }
+};
+
+export const getCategory = async (req, res) => {
+  try {
+    const category = await getCategoryById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ status: 'error', message: 'Category not found.' });
+    }
+    return res.status(200).json({ status: 'success', data: category });
+  } catch (error) {
+    console.error('Error fetching category:', error);
+    return fail(res, error, 'Failed to retrieve category.');
   }
 };
 

@@ -1,37 +1,111 @@
 import express from 'express';
 import { verifyToken, restrictTo } from '../middleware/authMiddleware.js';
-import { validate, rules } from '../middleware/validateRequest.js';
 import {
-  getAllApprovals,
-  getPendingApprovals,
-  getApprovalById,
+  createRequest,
+  getRequests,
+  getRequestById,
+  updateRequest,
+  submitRequest,
   approveRequest,
-  rejectRequest
+  rejectRequest,
+  cancelRequest,
+  getHistory,
+  getManagerQueue,
+  getManagerPendingQueue
 } from '../controllers/approvalController.js';
 
 const router = express.Router();
 
-// GET /api/approvals - Return all approvals (manager, admin, and officer)
-router.get('/approvals', verifyToken, restrictTo('manager', 'admin', 'officer'), getAllApprovals);
+// ── Approval Request Operations ──
 
-// GET /api/approvals/pending - Return pending approvals only (manager and admin only)
-// Note: Placed above /approvals/:id to prevent parameter collision
-router.get('/approvals/pending', verifyToken, restrictTo('manager', 'admin'), getPendingApprovals);
+// POST /api/approvals - Create Approval Request (Admin, Officer)
+router.post(
+  '/approvals',
+  verifyToken,
+  restrictTo('admin', 'officer'),
+  createRequest
+);
 
-// GET /api/approvals/:id - Return details of a single approval (manager, admin, and officer)
-router.get('/approvals/:id', verifyToken, restrictTo('manager', 'admin', 'officer'), getApprovalById);
+// GET /api/approvals - List Approval Requests (Admin, Officer, Manager)
+router.get(
+  '/approvals',
+  verifyToken,
+  restrictTo('admin', 'officer', 'manager'),
+  getRequests
+);
 
-// PUT /api/approvals/:id/approve - Approve request & auto-generate PO (manager and admin only)
-router.put('/approvals/:id/approve', verifyToken, restrictTo('manager', 'admin'), approveRequest);
+// GET /api/approvals/:id - Get Single Approval Details (Admin, Officer, Manager)
+router.get(
+  '/approvals/:id',
+  verifyToken,
+  restrictTo('admin', 'officer', 'manager'),
+  getRequestById
+);
 
-// PUT /api/approvals/:id/reject - Reject request & revert statuses (manager and admin only)
-router.put('/approvals/:id/reject', 
-  verifyToken, 
-  restrictTo('manager', 'admin'), 
-  validate([
-    rules.required('remarks')
-  ]),
+// PUT /api/approvals/:id - Update Draft Approval Request (Admin, Officer)
+router.put(
+  '/approvals/:id',
+  verifyToken,
+  restrictTo('admin', 'officer'),
+  updateRequest
+);
+
+// PATCH /api/approvals/:id/submit - Submit Request (Admin, Officer)
+router.patch(
+  '/approvals/:id/submit',
+  verifyToken,
+  restrictTo('admin', 'officer'),
+  submitRequest
+);
+
+// PATCH /api/approvals/:id/approve - Approve Request (Admin, Manager)
+router.patch(
+  '/approvals/:id/approve',
+  verifyToken,
+  restrictTo('admin', 'manager'),
+  approveRequest
+);
+
+// PATCH /api/approvals/:id/reject - Reject Request (Admin, Manager)
+router.patch(
+  '/approvals/:id/reject',
+  verifyToken,
+  restrictTo('admin', 'manager'),
   rejectRequest
+);
+
+// PATCH /api/approvals/:id/cancel - Cancel Request (Admin, Officer)
+router.patch(
+  '/approvals/:id/cancel',
+  verifyToken,
+  restrictTo('admin', 'officer'),
+  cancelRequest
+);
+
+// GET /api/approvals/:id/history - Get Timeline History (Admin, Officer, Manager)
+router.get(
+  '/approvals/:id/history',
+  verifyToken,
+  restrictTo('admin', 'officer', 'manager'),
+  getHistory
+);
+
+// ── Manager Queue Operations ──
+
+// GET /api/manager/approvals - List Assigned Approvals (Admin, Manager)
+router.get(
+  '/manager/approvals',
+  verifyToken,
+  restrictTo('admin', 'manager'),
+  getManagerQueue
+);
+
+// GET /api/manager/approvals/pending - List Assigned Pending Approvals (Admin, Manager)
+router.get(
+  '/manager/approvals/pending',
+  verifyToken,
+  restrictTo('admin', 'manager'),
+  getManagerPendingQueue
 );
 
 export default router;

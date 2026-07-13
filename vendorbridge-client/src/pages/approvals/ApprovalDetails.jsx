@@ -1,33 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getApprovalById } from '../../api/approvalApi';
+import { 
+  getApprovalById, 
+  getApprovalHistory, 
+  submitApproval, 
+  cancelApproval 
+} from '../../api/approvalApi';
 import Badge from '../../components/Badge';
 import Toast from '../../components/Toast';
 import Spinner from '../../components/Spinner';
 import ApproveModal from '../../components/ApproveModal';
 import RejectModal from '../../components/RejectModal';
 import { useAuth } from '../../context/AuthContext';
+import { 
+  ArrowLeft, 
+  Calendar, 
+  DollarSign, 
+  Clock, 
+  FileText, 
+  User, 
+  Award, 
+  TrendingDown, 
+  TrendingUp, 
+  AlertTriangle,
+  History,
+  CheckCircle2,
+  Trash2,
+  Send,
+  Briefcase
+} from 'lucide-react';
 
-/**
- * ApprovalDetails Page Component
- * Renders full analytical details of a procurement selection request.
- */
 const ApprovalDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  const [approval, setApproval] = useState(null);
+  const [request, setRequest] = useState(null);
+  const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState(null);
   
-  // Modals status
+  // Modal states
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [processingAction, setProcessingAction] = useState(false);
   
   // Toast notifications status
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState('success');
+  const [toast, setToast] = useState({ message: '', type: '' });
 
   const loadApprovalDetails = async () => {
     setLoading(true);
@@ -35,7 +55,7 @@ const ApprovalDetails = () => {
     try {
       const response = await getApprovalById(id);
       if (response.status === 'success') {
-        setApproval(response.data);
+        setRequest(response.data);
       } else {
         setError('Failed to fetch approval request details.');
       }
@@ -47,14 +67,72 @@ const ApprovalDetails = () => {
     }
   };
 
+  const loadHistoryTimeline = async () => {
+    setLoadingHistory(true);
+    try {
+      const response = await getApprovalHistory(id);
+      if (response.status === 'success') {
+        setHistoryList(response.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load history timeline:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   useEffect(() => {
     loadApprovalDetails();
+    loadHistoryTimeline();
   }, [id]);
 
-  // Indian Currency formatter
+  const handleApproveSuccess = () => {
+    setShowApproveModal(false);
+    setToast({ message: 'Quotation selection has been APPROVED successfully.', type: 'success' });
+    loadApprovalDetails();
+    loadHistoryTimeline();
+  };
+
+  const handleRejectSuccess = () => {
+    setShowRejectModal(false);
+    setToast({ message: 'Quotation selection has been REJECTED. RFQ state reverted.', type: 'success' });
+    loadApprovalDetails();
+    loadHistoryTimeline();
+  };
+
+  const handleSubmitRequest = async () => {
+    setProcessingAction(true);
+    try {
+      await submitApproval(id);
+      setToast({ message: 'Approval request submitted successfully.', type: 'success' });
+      loadApprovalDetails();
+      loadHistoryTimeline();
+    } catch (err) {
+      console.error(err);
+      setToast({ message: err.message || 'Failed to submit request.', type: 'error' });
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    setProcessingAction(true);
+    try {
+      await cancelApproval(id);
+      setToast({ message: 'Approval request cancelled successfully. RFQ state reverted.', type: 'success' });
+      loadApprovalDetails();
+      loadHistoryTimeline();
+    } catch (err) {
+      console.error(err);
+      setToast({ message: err.message || 'Failed to cancel request.', type: 'error' });
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
   const formatCurrency = (val) => {
     const num = parseFloat(val);
-    if (isNaN(num)) return '₹ 0';
+    if (isNaN(num)) return '₹0';
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -62,335 +140,330 @@ const ApprovalDetails = () => {
     }).format(num);
   };
 
-  // Date formatter
   const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('en-IN', {
       day: 'numeric',
-      month: 'long',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
   };
 
-  const handleApproveSuccess = () => {
-    setShowApproveModal(false);
-    setToastType('success');
-    setToastMessage('Approved! Purchase Order has been generated.');
-    loadApprovalDetails();
-  };
-
-  const handleRejectSuccess = () => {
-    setShowRejectModal(false);
-    setToastType('success');
-    setToastMessage('Procurement request rejected. State reverted.');
-    loadApprovalDetails();
-  };
-
-  if (loading && !approval) {
-    return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Spinner />
-      </div>
-    );
+  if (loading && !request) {
+    return <Spinner fullPage={true} />;
   }
 
-  if (error || !approval) {
+  if (error || !request) {
     return (
-      <div className="space-y-4">
-        <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-4 text-sm text-rose-400">
+      <div className="space-y-4 text-center max-w-lg mx-auto py-12">
+        <div className="rounded-[24px] bg-rose-50 border border-rose-100 p-6 text-xs font-bold text-rose-600">
           {error || 'Approval request details could not be found.'}
         </div>
         <button
           onClick={() => navigate('/approvals')}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-700 hover:text-white transition"
+          className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition"
         >
-          &larr; Back to Approvals List
+          &larr; Back to Dashboard
         </button>
       </div>
     );
   }
 
-  const subtotal = parseFloat(approval.total_price);
-  const gstAmount = subtotal * 0.18;
-  const grandTotal = subtotal + gstAmount;
-
-  // Destructure comparison variables
-  const { total_vendors, lowest_price, difference, percentage_difference } = approval.comparison_summary || {};
-  const isLowest = difference <= 0;
+  const isCreator = request.requested_by === user.id;
+  const isApprover = request.assigned_to === user.id || user.role === 'admin';
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10">
-      {/* Toast Popups */}
-      {toastMessage && (
+      {/* Toast Alert */}
+      {toast.message && (
         <Toast
-          message={toastMessage}
-          type={toastType}
-          onClose={() => setToastMessage('')}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({ message: '', type: '' })}
         />
       )}
 
-      {/* Approve Modal */}
+      {processingAction && <Spinner fullPage={true} />}
+
+      {/* Modals */}
       {showApproveModal && (
         <ApproveModal
-          approvalId={approval.id}
-          rfqTitle={approval.rfq_title}
-          vendorName={approval.vendor_name}
-          grandTotal={grandTotal}
+          approvalId={request.id}
+          rfqTitle={request.rfq_title}
+          vendorName={request.vendor_name}
+          grandTotal={request.grand_total}
           onSuccess={handleApproveSuccess}
           onClose={() => setShowApproveModal(false)}
         />
       )}
 
-      {/* Reject Modal */}
       {showRejectModal && (
         <RejectModal
-          approvalId={approval.id}
-          rfqTitle={approval.rfq_title}
+          approvalId={request.id}
+          rfqTitle={request.rfq_title}
           onSuccess={handleRejectSuccess}
           onClose={() => setShowRejectModal(false)}
         />
       )}
 
-      {/* Header Navigation */}
+      {/* Navigation and status badge */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => navigate('/approvals')}
-          className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition"
+          className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-500 hover:text-[#22C55E] transition"
         >
-          &larr; Back to Approvals List
+          <ArrowLeft size={16} /> Back to Approvals Dashboard
         </button>
-        <Badge status={approval.decision} />
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Decision status:</span>
+          <Badge status={request.status.toLowerCase()} />
+        </div>
       </div>
 
-      {/* Page Title */}
-      <div className="border-b border-slate-800 pb-4">
-        <h1 className="text-2xl font-bold text-white tracking-tight leading-normal font-sans">
-          Procurement Review: {approval.rfq_title}
+      {/* Main Title Banner */}
+      <div className="border-b border-slate-200 pb-4">
+        <span className="text-xs font-black uppercase tracking-[0.16em] text-[#22C55E] font-mono">Reference No: {request.approval_number}</span>
+        <h1 className="text-2xl font-black text-slate-900 mt-1 leading-normal font-sans">
+          Quotation Selection Review: {request.rfq_title}
         </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Review comparisons and pricing matrices before making approval decisions.
-        </p>
       </div>
 
-      {/* Main Grid */}
+      {/* Summary grid */}
       <div className="grid gap-6 md:grid-cols-3">
         
-        {/* Left Column: Summary and Vendor Details */}
+        {/* Left Column: Details summaries */}
         <div className="md:col-span-2 space-y-6">
-          
-          {/* Section 1 — Procurement Summary */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
-            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <svg className="h-5 w-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              RFQ Summary
+          {/* RFQ specs summary */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_12px_45px_rgba(15,23,42,0.04)] space-y-4">
+            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <FileText size={18} className="text-[#22C55E]" />
+              RFQ Specifications
             </h2>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Quantity</span>
-                <span className="text-slate-200 font-semibold text-base">{approval.rfq_quantity} units</span>
+            <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-500">
+              <div>
+                <span>RFQ Number</span>
+                <span className="mt-1 block font-black text-slate-900 font-mono text-sm">{request.rfq_number}</span>
               </div>
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Submission Deadline</span>
-                <span className="text-slate-200 font-semibold text-base">{new Date(approval.rfq_deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              <div>
+                <span>Required Quantity</span>
+                <span className="mt-1 block font-black text-slate-900 font-mono text-sm">{request.rfq_quantity} units</span>
+              </div>
+              <div className="col-span-2">
+                <span>Detailed Description</span>
+                <p className="mt-1.5 text-slate-650 bg-slate-50 border border-slate-100 rounded-2xl p-3.5 leading-relaxed font-semibold">
+                  {request.rfq_description}
+                </p>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-1 pt-2">
-              <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Detailed Specifications</span>
-              <p className="text-sm text-slate-300 bg-slate-950/40 rounded-lg p-3 border border-slate-800/60 leading-relaxed whitespace-pre-wrap">
-                {approval.rfq_description}
+          {/* Selected Vendor Profile */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_12px_45px_rgba(15,23,42,0.04)] space-y-4">
+            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <Briefcase size={18} className="text-[#22C55E]" />
+              Vendor Profile & Proposal Notes
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 text-xs font-bold text-slate-500">
+              <div>
+                <span>Vendor Corporate Name</span>
+                <span className="mt-1 block text-slate-900 font-black text-sm">{request.vendor_name}</span>
+              </div>
+              <div>
+                <span>Email Address</span>
+                <span className="mt-1 block text-slate-900 text-sm font-mono">{request.vendor_email}</span>
+              </div>
+              <div>
+                <span>Phone Contact</span>
+                <span className="mt-1 block text-slate-900 text-sm font-mono">{request.vendor_phone}</span>
+              </div>
+              <div>
+                <span>Corporate Address</span>
+                <span className="mt-1 block text-slate-900 text-sm">{request.vendor_address || 'India'}</span>
+              </div>
+              <div className="col-span-2 border-t border-slate-100 pt-3">
+                <span>Quotation proposal notes</span>
+                <p className="mt-1.5 text-slate-650 italic leading-relaxed font-semibold bg-slate-50 rounded-2xl p-3 border border-slate-100">
+                  {request.vendor_notes ? `"${request.vendor_notes}"` : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Selection reasoning remarks */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_12px_45px_rgba(15,23,42,0.04)] space-y-3">
+            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <Award size={18} className="text-[#22C55E]" />
+              Recommendation Justification
+            </h2>
+            <div className="text-xs">
+              <span className="font-bold text-slate-400 uppercase tracking-wider block">Selection Reason remarks</span>
+              <p className="mt-1.5 font-semibold text-slate-800 bg-slate-50 border border-slate-100 rounded-2xl p-4 italic leading-relaxed">
+                "{request.selection_reason}"
               </p>
             </div>
           </div>
 
-          {/* Section 2 — Selected Vendor Profile */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
-            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <svg className="h-5 w-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              Vendor Profile & Proposal Details
+          {/* Stepper Timeline History */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_12px_45px_rgba(15,23,42,0.04)] space-y-6">
+            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <History size={18} className="text-[#22C55E]" />
+              Approval Workflow Timeline
             </h2>
 
-            <div className="grid gap-4 sm:grid-cols-2 text-sm">
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Company Name</span>
-                <span className="font-semibold text-slate-200">{approval.vendor_name}</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Email Contact</span>
-                <span className="font-semibold text-slate-200">{approval.vendor_email}</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">GST Registration</span>
-                <span className="font-semibold text-slate-200 uppercase">{approval.vendor_gst || 'Not Provided'}</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Category</span>
-                <span className="font-semibold text-slate-200">{approval.vendor_category || 'IT & General Supplies'}</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Proposed Delivery Time</span>
-                <span className="font-semibold text-slate-200">{approval.delivery_days} calendar days</span>
-              </div>
-            </div>
-
-            {approval.vendor_notes && (
-              <div className="space-y-1 pt-2">
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider block">Vendor Proposal Notes</span>
-                <p className="text-sm text-slate-400 bg-slate-950/30 rounded-lg p-3 italic border border-slate-800/40">
-                  "{approval.vendor_notes}"
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Section 3 — Price Analysis card */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
-            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <svg className="h-5 w-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Quotations & Bidding Analytics
-            </h2>
-
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-              <div className="rounded-lg bg-slate-950/40 border border-slate-800/80 p-3 text-center">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Selected Bid</span>
-                <div className="text-base font-bold text-slate-200 mt-1">{formatCurrency(subtotal)}</div>
-              </div>
-              <div className="rounded-lg bg-slate-950/40 border border-slate-800/80 p-3 text-center">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Lowest Quote</span>
-                <div className="text-base font-bold text-emerald-400 mt-1">{formatCurrency(lowest_price)}</div>
-              </div>
-              <div className="rounded-lg bg-slate-950/40 border border-slate-800/80 p-3 text-center">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Cost Difference</span>
-                <div className={`text-base font-bold mt-1 ${isLowest ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {isLowest ? 'Lowest Bid' : `+${formatCurrency(difference)}`}
-                </div>
-              </div>
-              <div className="rounded-lg bg-slate-950/40 border border-slate-800/80 p-3 text-center">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Total Bidders</span>
-                <div className="text-base font-bold text-slate-200 mt-1">{total_vendors} Vendors</div>
-              </div>
-            </div>
-
-            {/* Analysis details */}
-            {!isLowest && (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/25 p-3.5 flex gap-3 text-amber-400 text-xs leading-relaxed">
-                <svg className="h-5 w-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div>
-                  <span className="font-bold">Price Warning:</span> This quotation is <strong>{percentage_difference}%</strong> higher than the lowest submitted offer (which was {formatCurrency(lowest_price)}). Ensure vendor specifications or delivery guidelines justify the cost delta.
-                </div>
-              </div>
-            )}
-            
-            {isLowest && (
-              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3.5 flex gap-3 text-emerald-400 text-xs leading-relaxed">
-                <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <span className="font-bold">Highly Optimized Selection:</span> This proposal represents the **lowest cost** bidder among all {total_vendors} quotation submissions.
-                </div>
+            {loadingHistory ? (
+              <div className="py-6 flex justify-center"><Spinner size={24} /></div>
+            ) : historyList.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 font-bold text-xs">No timeline events recorded.</div>
+            ) : (
+              <div className="relative border-l-2 border-slate-100 pl-6 space-y-6 ml-3 text-xs">
+                {historyList.map((h, i) => (
+                  <div key={i} className="relative">
+                    {/* Stepper Dot */}
+                    <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 bg-white border-[#22C55E]" />
+                    
+                    <div className="space-y-1 font-semibold">
+                      <div className="flex items-center gap-3">
+                        <span className="font-black text-slate-900 text-sm">{h.action_type}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">{formatDate(h.action_date)}</span>
+                      </div>
+                      <p className="text-slate-500 flex items-center gap-1">
+                        <User size={12} className="text-slate-400" />
+                        <span>{h.user_name} ({h.user_role})</span>
+                      </p>
+                      {h.remarks && (
+                        <p className="text-slate-600 bg-slate-50 rounded-xl p-2.5 mt-1 border border-slate-100 italic">
+                          "{h.remarks}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Invoice cost breakdown and action controls */}
+        {/* Right Column: Invoicing breakdown and actions */}
         <div className="space-y-6">
-          
-          {/* Section 4 — Cost Breakdown Invoice */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white tracking-tight uppercase">Cost Breakdown</h2>
-            
-            <div className="space-y-2.5 text-sm">
+          {/* Cost breakdown invoice card */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_45px_rgba(15,23,42,0.04)] space-y-4">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Proposal Breakdown</h2>
+            <div className="space-y-2.5 text-xs font-bold text-slate-500">
               <div className="flex justify-between">
-                <span className="text-slate-400">Subtotal:</span>
-                <span className="font-semibold text-slate-200">{formatCurrency(subtotal)}</span>
+                <span>Quotation No:</span>
+                <span className="text-slate-800 font-mono text-sm">{request.quotation_number}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">GST (18% standard):</span>
-                <span className="font-semibold text-slate-200">{formatCurrency(gstAmount)}</span>
+                <span>Subtotal:</span>
+                <span className="text-slate-800 font-mono">{formatCurrency(request.subtotal)}</span>
               </div>
-              <hr className="border-slate-800" />
-              <div className="flex justify-between pt-1">
-                <span className="font-bold text-white">Grand Total:</span>
-                <span className="font-bold text-lg text-emerald-400">{formatCurrency(grandTotal)}</span>
+              <div className="flex justify-between">
+                <span>Discount Amount:</span>
+                <span className="text-rose-600 font-mono">- {formatCurrency(request.discount_amount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Tax Amount (GST):</span>
+                <span className="text-slate-800 font-mono">{formatCurrency(request.tax_amount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Delivery days:</span>
+                <span className="text-slate-800">{request.delivery_days} calendar days</span>
+              </div>
+              <hr className="border-slate-100" />
+              <div className="flex justify-between pt-1 text-sm">
+                <span className="font-black text-slate-900">Grand Total:</span>
+                <span className="font-black text-base text-emerald-600 font-mono">{formatCurrency(request.grand_total)}</span>
               </div>
             </div>
           </div>
 
-          {/* Section 5 — Decision Context Actions */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-            <h2 className="text-sm font-bold text-white tracking-tight uppercase">Workflow Actions</h2>
-            
-            {approval.decision === 'pending' ? (
-              <div className="flex flex-col gap-3">
-                {(user?.role === 'manager' || user?.role === 'admin') ? (
-                  <>
+          {/* Workflow Action buttons */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_12px_45px_rgba(15,23,42,0.04)] space-y-4">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">Workflow Controls</h2>
+
+            {/* If Draft, Officer can submit */}
+            {request.status === 'Draft' && (
+              <div className="space-y-2">
+                {isCreator ? (
+                  <button
+                    onClick={handleSubmitRequest}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#22C55E] to-[#16A34A] px-5 py-3 text-xs font-black text-white hover:from-[#16A34A] hover:to-[#9946e6] transition-all flex items-center justify-center gap-1.5 shadow-md shadow-green-500/10 cursor-pointer"
+                  >
+                    <Send size={14} /> Submit Request
+                  </button>
+                ) : (
+                  <p className="text-[10px] font-bold text-slate-400 text-center italic">
+                    Waiting for the procurement officer to submit this request.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* If Pending Approval, Manager can Approve/Reject, Officer can Cancel */}
+            {request.status === 'Pending Approval' && (
+              <div className="space-y-3">
+                {isApprover && (
+                  <div className="flex flex-col gap-2">
                     <button
                       onClick={() => setShowApproveModal(true)}
-                      className="w-full py-3 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition shadow-lg shadow-emerald-600/10 text-center cursor-pointer"
+                      className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-black text-white transition shadow-md shadow-emerald-500/10 cursor-pointer text-center"
                     >
                       Approve Request
                     </button>
                     <button
                       onClick={() => setShowRejectModal(true)}
-                      className="w-full py-3 px-4 rounded-lg bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white font-bold text-sm border border-rose-500/20 hover:border-transparent transition text-center cursor-pointer"
+                      className="w-full py-3 px-4 rounded-xl bg-rose-50 border border-rose-250 text-rose-600 hover:bg-rose-600 hover:text-white hover:border-transparent text-xs font-bold transition cursor-pointer text-center"
                     >
                       Reject Request
                     </button>
-                  </>
-                ) : (
-                  <p className="text-xs text-slate-400 text-center">
-                    Only users with manager role can process pending requests.
+                  </div>
+                )}
+
+                {isCreator && (
+                  <button
+                    onClick={handleCancelRequest}
+                    className="w-full py-2.5 px-4 rounded-xl bg-amber-50 border border-amber-250 text-amber-600 hover:bg-amber-600 hover:text-white hover:border-transparent text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash2 size={13} /> Cancel Request
+                  </button>
+                )}
+
+                {!isApprover && !isCreator && (
+                  <p className="text-[10px] font-bold text-slate-400 text-center italic">
+                    Assigned to approver: {request.approver_name}
                   </p>
                 )}
               </div>
-            ) : (
-              <div className="space-y-3.5">
-                <div className="rounded-lg bg-slate-950/45 p-4 border border-slate-800 space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Decision Status:</span>
-                    <span className="font-bold uppercase"><Badge status={approval.decision} /></span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Decided By:</span>
-                    <span className="font-medium text-slate-300">{approval.approver_name || 'System Manager'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Decided At:</span>
-                    <span className="font-medium text-slate-300">{formatDate(approval.decided_at)}</span>
-                  </div>
-                  <hr className="border-slate-800" />
-                  <div className="space-y-1">
-                    <span className="text-slate-500 font-semibold block">Decision Remarks:</span>
-                    <span className="italic text-slate-300 leading-normal block">"{approval.remarks || 'No remarks provided.'}"</span>
-                  </div>
-                </div>
+            )}
 
-                {approval.decision === 'approved' && approval.po_id && (
-                  <Link
-                    to={`/purchase-orders/${approval.po_id}`}
-                    className="block w-full py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-center text-sm transition shadow-lg shadow-cyan-600/10"
-                  >
-                    View Purchase Order
-                  </Link>
+            {/* Completed states */}
+            {['Approved', 'Rejected', 'Cancelled'].includes(request.status) && (
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 space-y-2.5 text-xs font-bold text-slate-500">
+                <div className="flex justify-between">
+                  <span>Processed By:</span>
+                  <span className="text-slate-800">{request.approver_name || 'System Approver'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Process Date:</span>
+                  <span className="text-slate-800 font-mono text-[10px]">
+                    {formatDate(request.approved_at || request.rejected_at || request.updated_at)}
+                  </span>
+                </div>
+                {request.remarks && (
+                  <div className="space-y-1.5 border-t border-slate-150 pt-2.5">
+                    <span>Approver remarks / comments:</span>
+                    <p className="italic font-semibold text-slate-700 block bg-white border border-slate-100 rounded-xl p-3 leading-normal">
+                      "{request.remarks}"
+                    </p>
+                  </div>
                 )}
               </div>
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

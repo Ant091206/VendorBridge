@@ -80,7 +80,7 @@ const POPreview = () => {
       <div className="mx-auto max-w-4xl mb-6 flex items-center justify-between bg-white border border-slate-200 p-4 rounded-2xl shadow-sm print:hidden">
         <div className="flex items-center gap-2">
           <span className="text-xs font-black text-slate-500 uppercase">Document Preview:</span>
-          <span className="font-mono text-xs font-black text-[#6D5DFC] bg-indigo-50 px-2.5 py-1 rounded-lg">
+          <span className="font-mono text-xs font-black text-[#22C55E] bg-green-50 px-2.5 py-1 rounded-lg">
             {po.po_number}
           </span>
         </div>
@@ -95,7 +95,7 @@ const POPreview = () => {
           
           <button
             onClick={() => window.print()}
-            className="rounded-xl bg-[#6D5DFC] hover:bg-[#5b4deb] px-4 py-2 text-xs font-black text-white shadow-md shadow-indigo-500/10 cursor-pointer flex items-center gap-1.5"
+            className="rounded-xl bg-[#22C55E] hover:bg-[#16A34A] px-4 py-2 text-xs font-black text-white shadow-md shadow-green-500/10 cursor-pointer flex items-center gap-1.5"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -112,7 +112,7 @@ const POPreview = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-slate-950">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-[#6D5DFC] flex items-center justify-center text-white font-bold text-base print:bg-black print:from-black print:to-black">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-[#22C55E] flex items-center justify-center text-white font-bold text-base print:bg-black print:from-black print:to-black">
                 VB
               </div>
               <span className="text-lg font-black tracking-tight print:text-black">VendorBridge ERP</span>
@@ -122,7 +122,7 @@ const POPreview = () => {
 
           <div className="text-left sm:text-right space-y-1">
             <h1 className="text-xl font-black text-slate-950 uppercase tracking-widest print:text-black">Purchase Order</h1>
-            <div className="font-mono text-xs font-black text-[#6D5DFC] print:text-black">{po.po_number}</div>
+            <div className="font-mono text-xs font-black text-[#22C55E] print:text-black">{po.po_number}</div>
             <div className="text-[11px] text-slate-400 font-bold">Issue Date: {formatDate(po.created_at)}</div>
           </div>
         </div>
@@ -131,7 +131,7 @@ const POPreview = () => {
         <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:bg-slate-100 print:text-black print:border-slate-350">
           <div className="flex items-center gap-2">
             <span className="text-xs font-black text-slate-400 uppercase">Status:</span>
-            <span className="inline-flex rounded-lg bg-indigo-50 border border-indigo-155 text-[#6D5DFC] font-black uppercase text-[10px] px-2.5 py-1 tracking-wider print:bg-white print:text-black">
+            <span className="inline-flex rounded-lg bg-green-50 border border-indigo-155 text-[#22C55E] font-black uppercase text-[10px] px-2.5 py-1 tracking-wider print:bg-white print:text-black">
               {po.status}
             </span>
           </div>

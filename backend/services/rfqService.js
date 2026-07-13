@@ -2,9 +2,11 @@ import db from '../config/db.js';
 
 const allowedRFQSorts = {
   created_at: 'r.created_at',
-  deadline: 'r.deadline',
+  submission_deadline: 'r.submission_deadline',
   title: 'r.title',
-  rfq_number: 'r.rfq_number'
+  rfq_number: 'r.rfq_number',
+  priority: 'r.priority',
+  status: 'r.status'
 };
 
 const toPagination = (query) => {
@@ -24,9 +26,12 @@ const generateRFQNumber = async (conn) => {
     [`RFQ-${year}-%`]
   );
 
-  const last = rows[0]?.rfq_number?.split('-').pop();
-  const next = (Number.parseInt(last, 10) || 0) + 1;
-  return `RFQ-${year}-${String(next).padStart(5, '0')}`;
+  let next = 1;
+  if (rows.length > 0 && rows[0].rfq_number) {
+    const last = rows[0].rfq_number.split('-').pop();
+    next = (Number.parseInt(last, 10) || 0) + 1;
+  }
+  return `RFQ-${year}-${String(next).padStart(4, '0')}`;
 };
 
 const getVendorEmailFilter = async (user) => {
@@ -43,7 +48,7 @@ export const listRFQs = async (query, user) => {
   const params = [];
 
   if (query.search) {
-    conditions.push('(r.rfq_number LIKE ? OR r.title LIKE ? OR r.product_name LIKE ?)');
+    conditions.push('(r.rfq_number LIKE ? OR r.title LIKE ? OR r.description LIKE ?)');
     const term = `%${query.search}%`;
     params.push(term, term, term);
   }
@@ -53,21 +58,24 @@ export const listRFQs = async (query, user) => {
     params.push(query.status);
   }
 
+  if (query.priority) {
+    conditions.push('r.priority = ?');
+    params.push(query.priority);
+  }
+
+  if (query.type) {
+    conditions.push('r.type = ?');
+    params.push(query.type);
+  }
+
   const vendorId = await getVendorEmailFilter(user);
   let vendorJoin = '';
-  let quotationJoin = '';
-  let quotationFields = '';
-  let selectParams = [];
+  
   if (user.role === 'vendor') {
     vendorJoin = 'JOIN rfq_vendors rv_scope ON rv_scope.rfq_id = r.id';
     conditions.push('rv_scope.vendor_id = ?');
     conditions.push("r.status != 'draft'");
     params.push(vendorId);
-
-    quotationJoin = 'LEFT JOIN quotations q ON q.rfq_id = r.id AND q.vendor_id = ?';
-    quotationFields = `, q.id AS quotation_id, q.status AS quotation_actual_status, q.unit_price,
-                       CASE WHEN q.id IS NOT NULL THEN 'Submitted' ELSE 'Pending' END AS quotation_status`;
-    selectParams.push(vendorId);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -80,37 +88,32 @@ export const listRFQs = async (query, user) => {
     params
   );
 
-  const groupBy = user.role === 'vendor' ? 'GROUP BY r.id, q.id' : 'GROUP BY r.id';
-  const executionParams = [...selectParams, ...params, limit, offset];
-
-  const [rows] = await db.execute(
+  const [rows] = await db.query(
     `SELECT
        r.id,
        r.rfq_number,
        r.title,
        r.description,
-       r.product_name,
-       r.product_details,
-       r.quantity,
-       r.estimated_budget,
-       r.deadline,
+       r.type,
+       r.priority,
+       r.issue_date,
+       r.submission_deadline,
        r.status,
+       r.notes,
        r.created_by,
        u.name AS created_by_name,
        r.created_at,
        r.updated_at,
-       COUNT(DISTINCT rv.vendor_id) AS assigned_vendors_count
-       ${quotationFields}
+       (SELECT COUNT(*) FROM rfq_vendors WHERE rfq_id = r.id) AS assigned_vendors_count,
+       (SELECT COUNT(*) FROM rfq_items WHERE rfq_id = r.id) AS items_count,
+       (SELECT COUNT(*) FROM rfq_attachments WHERE rfq_id = r.id) AS attachments_count
      FROM rfqs r
-     ${vendorJoin}
      LEFT JOIN users u ON u.id = r.created_by
-     LEFT JOIN rfq_vendors rv ON rv.rfq_id = r.id
-     ${quotationJoin}
+     ${vendorJoin}
      ${where}
-     ${groupBy}
      ORDER BY ${sortColumn} ${direction}
      LIMIT ? OFFSET ?`,
-    executionParams
+    [...params, limit, offset]
   );
 
   return {
@@ -137,19 +140,26 @@ export const getRFQ = async (id, user) => {
   }
 
   const [rows] = await db.execute(
-    `SELECT r.*, u.name AS created_by_name, COUNT(DISTINCT rv.vendor_id) AS assigned_vendors_count
+    `SELECT r.*, u.name AS created_by_name, u2.name AS updated_by_name
      FROM rfqs r
-     ${vendorJoin}
      LEFT JOIN users u ON u.id = r.created_by
-     LEFT JOIN rfq_vendors rv ON rv.rfq_id = r.id
-     WHERE r.id = ? ${vendorWhere}
-     GROUP BY r.id`,
+     LEFT JOIN users u2 ON u2.id = r.updated_by
+     ${vendorJoin}
+     WHERE r.id = ? ${vendorWhere}`,
     params
   );
 
   if (rows.length === 0) return null;
   const rfq = rows[0];
 
+  // Fetch items
+  const [items] = await db.execute(
+    'SELECT * FROM rfq_items WHERE rfq_id = ? ORDER BY id ASC',
+    [id]
+  );
+  rfq.items = items;
+
+  // Fetch assigned vendors
   const [vendors] = await db.execute(
     `SELECT
        v.id,
@@ -160,27 +170,30 @@ export const getRFQ = async (id, user) => {
        v.phone,
        v.city,
        v.status,
-       vc.name AS category_name,
-       rv.assigned_at
+       vc.name AS category_name
      FROM rfq_vendors rv
      JOIN vendors v ON v.id = rv.vendor_id
      LEFT JOIN vendor_categories vc ON vc.id = v.category_id
      WHERE rv.rfq_id = ?
-     ORDER BY v.vendor_name ASC`,
+     ORDER BY v.name ASC`,
     [id]
   );
-
   rfq.assigned_vendors = vendors;
+
+  // Fetch attachments
+  const [attachments] = await db.execute(
+    'SELECT * FROM rfq_attachments WHERE rfq_id = ? ORDER BY id ASC',
+    [id]
+  );
+  rfq.attachments = attachments;
+
   return rfq;
 };
 
 const ensureVendorsExist = async (vendorIds) => {
+  if (!vendorIds || !Array.isArray(vendorIds) || vendorIds.length === 0) return [];
   const uniqueIds = [...new Set(vendorIds.map((id) => Number(id)).filter(Boolean))];
-  if (uniqueIds.length === 0) {
-    const error = new Error('No vendors assigned.');
-    error.statusCode = 400;
-    throw error;
-  }
+  if (uniqueIds.length === 0) return [];
 
   const placeholders = uniqueIds.map(() => '?').join(',');
   const [rows] = await db.execute(
@@ -189,7 +202,7 @@ const ensureVendorsExist = async (vendorIds) => {
   );
 
   if (rows.length !== uniqueIds.length) {
-    const error = new Error('One or more assigned vendors were not found or are inactive.');
+    const error = new Error('One or more assigned vendors are invalid or inactive.');
     error.statusCode = 400;
     throw error;
   }
@@ -197,38 +210,50 @@ const ensureVendorsExist = async (vendorIds) => {
   return uniqueIds;
 };
 
-const normalizeRFQ = (payload) => ({
+const normalizeRFQ = (payload, userId, isUpdate = false) => ({
   title: payload.title.trim(),
   description: payload.description.trim(),
-  product_name: payload.product_name || payload.title.trim(),
-  product_details: payload.product_details.trim(),
-  quantity: Number(payload.quantity),
-  estimated_budget: Number(payload.estimated_budget || 0),
-  deadline: new Date(payload.deadline),
-  status: payload.status || 'open'
+  type: payload.type?.trim() || 'Other',
+  priority: payload.priority || 'Medium',
+  submission_deadline: new Date(payload.submission_deadline),
+  status: payload.status || 'draft',
+  notes: payload.notes || null,
+  created_by: isUpdate ? undefined : userId,
+  updated_by: isUpdate ? userId : null
 });
 
 export const createRFQRecord = async (payload, user) => {
   const vendorIds = await ensureVendorsExist(payload.vendor_ids);
-  const rfq = normalizeRFQ(payload);
+  const rfq = normalizeRFQ(payload, user.id, false);
   const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();
-    const rfqNumber = payload.rfq_number || await generateRFQNumber(conn);
+    const rfqNumber = await generateRFQNumber(conn);
 
     const [result] = await conn.execute(
       `INSERT INTO rfqs (
-        rfq_number, title, description, product_name, product_details, quantity,
-        estimated_budget, deadline, status, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        rfq_number, title, description, type, priority, submission_deadline, status, notes, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        rfqNumber, rfq.title, rfq.description, rfq.product_name, rfq.product_details,
-        rfq.quantity, rfq.estimated_budget, rfq.deadline, rfq.status, user.id
+        rfqNumber, rfq.title, rfq.description, rfq.type, rfq.priority, rfq.submission_deadline, rfq.status, rfq.notes, user.id
       ]
     );
 
     const rfqId = result.insertId;
+
+    // Insert items
+    if (Array.isArray(payload.items) && payload.items.length > 0) {
+      for (const item of payload.items) {
+        await conn.execute(
+          `INSERT INTO rfq_items (rfq_id, item_name, description, quantity, unit, expected_price)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [rfqId, item.item_name.trim(), item.description || null, Number(item.quantity), item.unit.trim(), item.expected_price || null]
+        );
+      }
+    }
+
+    // Insert vendors
     for (const vendorId of vendorIds) {
       await conn.execute('INSERT INTO rfq_vendors (rfq_id, vendor_id) VALUES (?, ?)', [rfqId, vendorId]);
     }
@@ -239,16 +264,12 @@ export const createRFQRecord = async (payload, user) => {
   } catch (error) {
     await conn.rollback();
     conn.release();
-    if (error.code === 'ER_DUP_ENTRY') {
-      error.message = 'Duplicate RFQ number.';
-      error.statusCode = 409;
-    }
     throw error;
   }
 };
 
 export const updateRFQRecord = async (id, payload, user) => {
-  const existing = await getRFQ(id, { ...user, role: user.role === 'vendor' ? 'vendor' : 'admin' });
+  const existing = await getRFQ(id, { ...user, role: 'admin' });
   if (!existing) {
     const error = new Error('RFQ not found.');
     error.statusCode = 404;
@@ -262,22 +283,33 @@ export const updateRFQRecord = async (id, payload, user) => {
   }
 
   const vendorIds = await ensureVendorsExist(payload.vendor_ids);
-  const rfq = normalizeRFQ(payload);
+  const rfq = normalizeRFQ(payload, user.id, true);
   const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();
     await conn.execute(
       `UPDATE rfqs
-       SET title = ?, description = ?, product_name = ?, product_details = ?, quantity = ?,
-           estimated_budget = ?, deadline = ?, status = ?
+       SET title = ?, description = ?, type = ?, priority = ?, submission_deadline = ?, status = ?, notes = ?, updated_by = ?
        WHERE id = ?`,
       [
-        rfq.title, rfq.description, rfq.product_name, rfq.product_details,
-        rfq.quantity, rfq.estimated_budget, rfq.deadline, rfq.status, id
+        rfq.title, rfq.description, rfq.type, rfq.priority, rfq.submission_deadline, rfq.status, rfq.notes, rfq.updated_by, id
       ]
     );
 
+    // Sync items: delete all and re-insert
+    await conn.execute('DELETE FROM rfq_items WHERE rfq_id = ?', [id]);
+    if (Array.isArray(payload.items) && payload.items.length > 0) {
+      for (const item of payload.items) {
+        await conn.execute(
+          `INSERT INTO rfq_items (rfq_id, item_name, description, quantity, unit, expected_price)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [id, item.item_name.trim(), item.description || null, Number(item.quantity), item.unit.trim(), item.expected_price || null]
+        );
+      }
+    }
+
+    // Sync vendors: delete all and re-insert
     await conn.execute('DELETE FROM rfq_vendors WHERE rfq_id = ?', [id]);
     for (const vendorId of vendorIds) {
       await conn.execute('INSERT INTO rfq_vendors (rfq_id, vendor_id) VALUES (?, ?)', [id, vendorId]);
@@ -293,7 +325,32 @@ export const updateRFQRecord = async (id, payload, user) => {
   }
 };
 
-export const closeRFQRecord = async (id) => {
+export const patchRFQStatus = async (id, status, userId, user) => {
+  const existing = await getRFQ(id, { ...user, role: 'admin' });
+  if (!existing) {
+    const error = new Error('RFQ not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (status === 'published') {
+    const [vendors] = await db.execute('SELECT id FROM rfq_vendors WHERE rfq_id = ? LIMIT 1', [id]);
+    if (vendors.length === 0) {
+      const error = new Error('At least one vendor must be assigned before publishing.');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  await db.execute(
+    'UPDATE rfqs SET status = ?, updated_by = ? WHERE id = ?',
+    [status, userId, id]
+  );
+
+  return getRFQ(id, user);
+};
+
+export const closeRFQRecord = async (id, userId) => {
   const [rows] = await db.execute('SELECT id FROM rfqs WHERE id = ?', [id]);
   if (rows.length === 0) {
     const error = new Error('RFQ not found.');
@@ -301,7 +358,7 @@ export const closeRFQRecord = async (id) => {
     throw error;
   }
 
-  await db.execute("UPDATE rfqs SET status = 'closed' WHERE id = ?", [id]);
+  await db.execute("UPDATE rfqs SET status = 'closed', updated_by = ? WHERE id = ?", [userId, id]);
 };
 
 export const deleteRFQRecord = async (id) => {
@@ -315,7 +372,9 @@ export const deleteRFQRecord = async (id) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
+    await conn.execute('DELETE FROM rfq_items WHERE rfq_id = ?', [id]);
     await conn.execute('DELETE FROM rfq_vendors WHERE rfq_id = ?', [id]);
+    await conn.execute('DELETE FROM rfq_attachments WHERE rfq_id = ?', [id]);
     await conn.execute('DELETE FROM rfqs WHERE id = ?', [id]);
     await conn.commit();
     conn.release();
@@ -324,4 +383,92 @@ export const deleteRFQRecord = async (id) => {
     conn.release();
     throw error;
   }
+};
+
+// ── Item Sub-Resources ───────────────────────────────────────────────────────
+export const addRFQItemRecord = async (rfqId, item) => {
+  const [result] = await db.execute(
+    `INSERT INTO rfq_items (rfq_id, item_name, description, quantity, unit, expected_price)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [rfqId, item.item_name.trim(), item.description || null, Number(item.quantity), item.unit.trim(), item.expected_price || null]
+  );
+  return { id: result.insertId, rfq_id: Number(rfqId), ...item };
+};
+
+export const updateRFQItemRecord = async (itemId, item) => {
+  const [rows] = await db.execute('SELECT id FROM rfq_items WHERE id = ?', [itemId]);
+  if (rows.length === 0) {
+    const error = new Error('RFQ item not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  await db.execute(
+    `UPDATE rfq_items
+     SET item_name = ?, description = ?, quantity = ?, unit = ?, expected_price = ?
+     WHERE id = ?`,
+    [item.item_name.trim(), item.description || null, Number(item.quantity), item.unit.trim(), item.expected_price || null, itemId]
+  );
+  return { id: Number(itemId), ...item };
+};
+
+export const deleteRFQItemRecord = async (itemId) => {
+  const [result] = await db.execute('DELETE FROM rfq_items WHERE id = ?', [itemId]);
+  if (result.affectedRows === 0) {
+    const error = new Error('RFQ item not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+};
+
+// ── Vendor Sub-Resources ─────────────────────────────────────────────────────
+export const assignRFQVendorsRecord = async (rfqId, vendorIds) => {
+  const validatedIds = await ensureVendorsExist(vendorIds);
+  const added = [];
+  for (const vId of validatedIds) {
+    const [existing] = await db.execute('SELECT id FROM rfq_vendors WHERE rfq_id = ? AND vendor_id = ?', [rfqId, vId]);
+    if (existing.length === 0) {
+      await db.execute('INSERT INTO rfq_vendors (rfq_id, vendor_id) VALUES (?, ?)', [rfqId, vId]);
+      added.push(vId);
+    }
+  }
+  return added;
+};
+
+export const removeRFQVendorRecord = async (rfqId, vendorId) => {
+  const [result] = await db.execute('DELETE FROM rfq_vendors WHERE rfq_id = ? AND vendor_id = ?', [rfqId, vendorId]);
+  if (result.affectedRows === 0) {
+    const error = new Error('Assignment not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+};
+
+// ── Attachment Sub-Resources ─────────────────────────────────────────────────
+export const addRFQAttachmentRecord = async (rfqId, file) => {
+  const [result] = await db.execute(
+    `INSERT INTO rfq_attachments (rfq_id, file_name, file_path, file_type)
+     VALUES (?, ?, ?, ?)`,
+    [rfqId, file.originalname, `/uploads/${file.filename}`, file.mimetype]
+  );
+  return {
+    id: result.insertId,
+    rfq_id: Number(rfqId),
+    file_name: file.originalname,
+    file_path: `/uploads/${file.filename}`,
+    file_type: file.mimetype
+  };
+};
+
+export const deleteRFQAttachmentRecord = async (attachmentId) => {
+  const [rows] = await db.execute('SELECT file_path FROM rfq_attachments WHERE id = ?', [attachmentId]);
+  if (rows.length === 0) {
+    const error = new Error('Attachment not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  // Delete database record first
+  await db.execute('DELETE FROM rfq_attachments WHERE id = ?', [attachmentId]);
+
+  return rows[0].file_path;
 };

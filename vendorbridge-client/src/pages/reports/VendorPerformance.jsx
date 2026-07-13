@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getVendorsReport } from '../../api/reportApi';
 import PageHeader from '../../components/PageHeader';
@@ -9,9 +9,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend, Cell
 } from 'recharts';
-import { Search, ChevronDown, Check, Percent, Award } from 'lucide-react';
+import { Search, ChevronDown, Check, Percent, Award, RotateCcw } from 'lucide-react';
 
-const CHART_COLORS = ['#6D5DFC', '#A855F7', '#22D3EE', '#F59E0B', '#10B981', '#EC4899'];
+const CHART_COLORS = ['#22C55E', '#16A34A', '#22D3EE', '#F59E0B', '#10B981', '#EC4899'];
 
 const formatCurrency = (val) => {
   const num = parseFloat(val);
@@ -26,6 +26,8 @@ const formatCurrency = (val) => {
 const VendorPerformance = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -33,10 +35,34 @@ const VendorPerformance = () => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [toastMessage, setToastMessage] = useState('');
 
+  // Filters
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+
+  const tabs = [
+    { label: 'Overview', path: '/reports', roles: ['admin', 'officer', 'manager', 'vendor'] },
+    { label: 'Vendor Performance', path: '/reports/vendors', roles: ['admin', 'officer', 'manager', 'vendor'] },
+    { label: 'Procurement Analytics', path: '/reports/analytics', roles: ['admin', 'officer', 'manager'] },
+    { label: 'Spending Analysis', path: '/reports/spending', roles: ['admin', 'officer', 'manager'] },
+    { label: 'Approvals', path: '/reports/approvals', roles: ['admin', 'officer', 'manager'] },
+    { label: 'Purchase Orders', path: '/reports/pos', roles: ['admin', 'officer', 'manager'] },
+    { label: 'Invoices', path: '/reports/invoices', roles: ['admin', 'officer', 'manager'] },
+    { label: 'Reports Center', path: '/reports/center', roles: ['admin', 'officer', 'manager'] }
+  ];
+
+  const allowedTabs = tabs.filter(t => t.roles.includes(user?.role));
+  const isVendor = user?.role === 'vendor';
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await getVendorsReport();
+      const filters = {
+        from: from || undefined,
+        to: to || undefined,
+        category: categoryId || undefined
+      };
+      const res = await getVendorsReport(filters);
       if (res.status === 'success') {
         setVendors(res.data || []);
       }
@@ -51,6 +77,13 @@ const VendorPerformance = () => {
   useEffect(() => {
     loadData();
   }, [user]);
+
+  const handleResetFilters = () => {
+    setFrom('');
+    setTo('');
+    setCategoryId('');
+    setTimeout(loadData, 50);
+  };
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -82,8 +115,6 @@ const VendorPerformance = () => {
     .sort((a, b) => b.total_value - a.total_value)
     .slice(0, 6);
 
-  const isVendor = user?.role === 'vendor';
-
   return (
     <div className="space-y-6">
       {toastMessage && (
@@ -99,12 +130,75 @@ const VendorPerformance = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-slate-200 pb-0">
-        <button onClick={() => navigate('/reports')} className="px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-900">Overview</button>
-        <button onClick={() => navigate('/reports/vendors')} className="px-5 py-3 text-sm font-black border-b-2 border-[#6D5DFC] text-[#6D5DFC]">Vendor Performance</button>
-        <button onClick={() => navigate('/reports/analytics')} className="px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-900">Procurement Analytics</button>
-        <button onClick={() => navigate('/reports/spending')} className="px-5 py-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-900">Spending Analysis</button>
+      <div className="flex gap-2 border-b border-slate-200 pb-0 overflow-x-auto scrollbar-none whitespace-nowrap">
+        {allowedTabs.map((tab) => (
+          <button
+            key={tab.path}
+            onClick={() => navigate(tab.path)}
+            className={`px-5 py-3 text-sm transition-all duration-150 cursor-pointer ${
+              location.pathname === tab.path
+                ? 'font-black border-b-2 border-[#22C55E] text-[#22C55E]'
+                : 'font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+
+      {/* Dynamic Filters for Staff */}
+      {!isVendor && (
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-premium space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Start Date</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="premium-input text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">End Date</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="premium-input text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Category Scope ID</label>
+              <input
+                type="number"
+                placeholder="e.g. 1"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="premium-input text-xs"
+              />
+            </div>
+
+            <div className="flex gap-2 items-end">
+              <button
+                onClick={loadData}
+                className="flex-1 rounded-2xl bg-primary hover:bg-primary-hover py-2.5 text-xs font-black text-white transition duration-150 shadow-md shadow-indigo-600/10 cursor-pointer h-[42px]"
+              >
+                Apply
+              </button>
+              <button
+                onClick={handleResetFilters}
+                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 cursor-pointer transition"
+                title="Reset Filters"
+              >
+                <RotateCcw size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
@@ -112,11 +206,11 @@ const VendorPerformance = () => {
         </div>
       ) : (
         <>
-          {/* Top Vendors Value Chart (Only for admin/staff view, hides or alters for single vendor) */}
+          {/* Top Vendors Value Chart */}
           {!isVendor && topVendorsData.length > 0 && (
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-900/5 space-y-4">
               <h3 className="text-sm font-black text-slate-950 flex items-center gap-2">
-                <Award size={18} className="text-[#6D5DFC]" />
+                <Award size={18} className="text-[#22C55E]" />
                 <span>Top Vendors by Procurement Value</span>
               </h3>
               <div className="h-80 w-full">
@@ -127,7 +221,7 @@ const VendorPerformance = () => {
                     <YAxis tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} tickFormatter={(v) => `₹${v / 1000}k`} />
                     <Tooltip formatter={(value) => [formatCurrency(value), 'Total value']} />
                     <Legend />
-                    <Bar dataKey="total_value" fill="#6D5DFC" name="Procurement Volume (INR)" radius={[6, 6, 0, 0]}>
+                    <Bar dataKey="total_value" fill="#22C55E" name="Procurement Volume (INR)" radius={[6, 6, 0, 0]}>
                       {topVendorsData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                       ))}
@@ -142,7 +236,7 @@ const VendorPerformance = () => {
           {isVendor && vendors.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-[#6D5DFC]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-50 text-[#22C55E]">
                   <Percent size={22} />
                 </div>
                 <div>
@@ -162,7 +256,7 @@ const VendorPerformance = () => {
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-purple-500">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-50 text-purple-500">
                   <Award size={22} />
                 </div>
                 <div>
@@ -182,7 +276,7 @@ const VendorPerformance = () => {
                 placeholder="Search vendor by name..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#6D5DFC]"
+                className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#22C55E]"
               />
             </div>
           )}
@@ -232,7 +326,7 @@ const VendorPerformance = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-600 font-semibold">
+                <tbody className="divide-y divide-slate-100 text-slate-650 font-semibold">
                   {filteredVendors.map((v) => (
                     <tr key={v.vendor_id} className="hover:bg-slate-50/50 transition">
                       <td className="px-6 py-4 whitespace-nowrap text-slate-900 font-bold">
@@ -262,6 +356,13 @@ const VendorPerformance = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredVendors.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-10 text-center text-xs font-semibold text-slate-400">
+                        No vendor performance logs match the filters.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -61,6 +61,42 @@ export const rules = {
     field,
     test: (val) => !val || allowed.includes(val),
     message: `${field} must be one of: ${allowed.join(', ')}.`
+  }),
+
+  /**
+   * Password must meet strong criteria:
+   *   - At least 8 characters
+   *   - At least 1 uppercase letter
+   *   - At least 1 lowercase letter
+   *   - At least 1 number
+   */
+  strongPassword: (field = 'password') => ({
+    field,
+    test: (val) => {
+      if (!val) return true; // let required() handle empty check
+      const s = String(val);
+      return (
+        s.length >= 8 &&
+        /[A-Z]/.test(s) &&
+        /[a-z]/.test(s) &&
+        /[0-9]/.test(s)
+      );
+    },
+    message: `${field} must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, and one number.`
+  }),
+
+  /**
+   * Optional phone number field.
+   * Accepts formats: +91XXXXXXXXXX, 9876543210, +1-800-555-0100, etc.
+   * Allows empty/null (optional).
+   */
+  phone: (field = 'phone') => ({
+    field,
+    test: (val) => {
+      if (!val || String(val).trim() === '') return true; // optional
+      return /^\+?[\d\s\-().]{7,20}$/.test(String(val).trim());
+    },
+    message: `${field} must be a valid phone number (7–20 digits, may include +, spaces, hyphens).`
   })
 };
 

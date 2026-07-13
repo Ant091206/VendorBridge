@@ -11,8 +11,8 @@ const QuickActions = memo(({ actions = [] }) => (
       {actions.map((action, index) => {
         const Icon = icons[index] || FilePlus2;
         return (
-          <Link key={action.label} to={action.path} className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 font-black text-slate-900 hover:border-[#6D5DFC]/30 hover:bg-white hover:text-[#6D5DFC] hover:shadow-lg">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#6D5DFC] shadow-sm group-hover:bg-[#6D5DFC] group-hover:text-white">
+          <Link key={action.label} to={action.path} className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 font-black text-slate-900 hover:border-[#22C55E]/30 hover:bg-white hover:text-[#22C55E] hover:shadow-lg">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#22C55E] shadow-sm group-hover:bg-[#22C55E] group-hover:text-white">
               <Icon size={18} />
             </span>
             <span className="text-sm">{action.label}</span>

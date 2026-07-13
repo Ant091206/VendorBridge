@@ -1,53 +1,369 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { Building2, Contact, MapPin, Tag, FileText, Lock } from 'lucide-react';
 
-const fieldClass = 'h-12 rounded-2xl border border-slate-200 bg-[#F8FAFC] px-4 text-sm font-semibold text-slate-800 outline-none focus:border-[#6D5DFC]';
-const areaClass = 'min-h-28 rounded-2xl border border-slate-200 bg-[#F8FAFC] px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#6D5DFC]';
+const VendorForm = ({ defaultValues, categories = [], onSubmit, submitting, submitLabel }) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors }
+  } = useForm({
+    defaultValues
+  });
 
-const VendorForm = ({ form, categories = [], onChange, onSubmit, submitting, submitLabel }) => {
-  const set = (key, value) => onChange({ ...form, [key]: value });
+  // Reset defaultValues when they change (e.g. when loading vendor details in Edit mode)
+  useEffect(() => {
+    if (defaultValues) {
+      reset(defaultValues);
+    }
+  }, [defaultValues, reset]);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
-      <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-        <h2 className="text-lg font-black text-slate-950">Company Details</h2>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <input className={fieldClass} value={form.vendor_code || ''} onChange={(e) => set('vendor_code', e.target.value)} placeholder="Vendor Code" required />
-          <input className={fieldClass} value={form.vendor_name || ''} onChange={(e) => set('vendor_name', e.target.value)} placeholder="Vendor Name" required />
-          <input className={fieldClass} value={form.company_name || ''} onChange={(e) => set('company_name', e.target.value)} placeholder="Company Name" required />
-          <select className={fieldClass} value={form.category_id || ''} onChange={(e) => set('category_id', e.target.value)}>
-            <option value="">Select Category</option>
-            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
-          <input className={fieldClass} value={form.gst_number || ''} onChange={(e) => set('gst_number', e.target.value)} placeholder="GST Number" required />
-          <input className={fieldClass} value={form.pan_number || ''} onChange={(e) => set('pan_number', e.target.value)} placeholder="PAN Number" />
-          <select className={fieldClass} value={form.status || 'active'} onChange={(e) => set('status', e.target.value)}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="blacklisted">Blacklisted</option>
-          </select>
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      {/* Company Details Section */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-premium hover:shadow-premium-hover transition-all duration-300">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="p-2 bg-green-50 text-primary rounded-xl">
+            <Building2 size={20} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 font-sans tracking-wide">Company Details</h2>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Vendor Code (Read-Only) */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+              Vendor Code <Lock size={12} className="text-slate-400" />
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                readOnly
+                {...register('vendor_code')}
+                className="premium-input font-mono font-bold bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed"
+                placeholder="Auto-generating..."
+              />
+            </div>
+          </div>
+
+          {/* Vendor Name */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Vendor Name *</label>
+            <input
+              type="text"
+              {...register('vendor_name', { required: 'Vendor name is required' })}
+              className={`premium-input ${errors.vendor_name ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="Legal name of business"
+            />
+            {errors.vendor_name && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.vendor_name.message}</p>
+            )}
+          </div>
+
+          {/* Company Name */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Company Name *</label>
+            <input
+              type="text"
+              {...register('company_name', { required: 'Company name is required' })}
+              className={`premium-input ${errors.company_name ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="Operating brand name"
+            />
+            {errors.company_name && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.company_name.message}</p>
+            )}
+          </div>
+
+          {/* Supplier Category */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Supplier Category *</label>
+            <div className="relative">
+              <select
+                {...register('category_id', { required: 'Supplier category is required' })}
+                className={`premium-input pr-10 cursor-pointer text-slate-700 ${
+                  errors.category_id ? 'border-rose-400 focus:ring-rose-200' : ''
+                }`}
+              >
+                <option value="">Select Category</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-slate-400">
+                <Tag size={16} />
+              </div>
+            </div>
+            {errors.category_id && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.category_id.message}</p>
+            )}
+          </div>
+
+          {/* GST Number */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">GST Number *</label>
+            <input
+              type="text"
+              {...register('gst_number', {
+                required: 'GST number is required',
+                pattern: {
+                  value: /^[a-zA-Z0-9]{15}$/,
+                  message: 'GST number must be exactly 15 characters alphanumeric'
+                }
+              })}
+              className={`premium-input font-mono ${errors.gst_number ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="15-digit GSTIN"
+            />
+            {errors.gst_number && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.gst_number.message}</p>
+            )}
+          </div>
+
+          {/* PAN Number */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">PAN Number</label>
+            <input
+              type="text"
+              {...register('pan_number', {
+                pattern: {
+                  value: /^[a-zA-Z0-9]{10}$/,
+                  message: 'PAN number must be exactly 10 characters alphanumeric'
+                }
+              })}
+              className={`premium-input font-mono ${errors.pan_number ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="10-digit PAN"
+            />
+            {errors.pan_number && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.pan_number.message}</p>
+            )}
+          </div>
+
+          {/* Status */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Verification Status</label>
+            <div className="relative">
+              <select
+                {...register('status')}
+                className="premium-input pr-10 cursor-pointer text-slate-700"
+              >
+                <option value="active">Active (Verified)</option>
+                <option value="inactive">Inactive</option>
+                <option value="blacklisted">Blacklisted</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-slate-400">
+                <Tag size={16} />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-        <h2 className="text-lg font-black text-slate-950">Contact & Address</h2>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <input className={fieldClass} value={form.contact_person || ''} onChange={(e) => set('contact_person', e.target.value)} placeholder="Contact Person" />
-          <input className={fieldClass} type="email" value={form.email || ''} onChange={(e) => set('email', e.target.value)} placeholder="Email" required />
-          <input className={fieldClass} value={form.phone || ''} onChange={(e) => set('phone', e.target.value)} placeholder="Phone" />
-          <input className={fieldClass} value={form.alternate_phone || ''} onChange={(e) => set('alternate_phone', e.target.value)} placeholder="Alternate Phone" />
-          <input className={fieldClass} value={form.address_line1 || ''} onChange={(e) => set('address_line1', e.target.value)} placeholder="Address Line 1" />
-          <input className={fieldClass} value={form.address_line2 || ''} onChange={(e) => set('address_line2', e.target.value)} placeholder="Address Line 2" />
-          <input className={fieldClass} value={form.city || ''} onChange={(e) => set('city', e.target.value)} placeholder="City" />
-          <input className={fieldClass} value={form.state || ''} onChange={(e) => set('state', e.target.value)} placeholder="State" />
-          <input className={fieldClass} value={form.country || 'India'} onChange={(e) => set('country', e.target.value)} placeholder="Country" />
-          <input className={fieldClass} value={form.postal_code || ''} onChange={(e) => set('postal_code', e.target.value)} placeholder="Postal Code" />
+      {/* Contact Information Section */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-premium hover:shadow-premium-hover transition-all duration-300">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="p-2 bg-green-50 text-primary rounded-xl">
+            <Contact size={20} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 font-sans tracking-wide">Contact Details</h2>
         </div>
-        <textarea className={`${areaClass} mt-4 w-full`} value={form.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="Full Address" />
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Contact Person */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Contact Person</label>
+            <input
+              type="text"
+              {...register('contact_person')}
+              className="premium-input"
+              placeholder="Primary contact name"
+            />
+          </div>
+
+          {/* Email Address */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Email Address *</label>
+            <input
+              type="email"
+              {...register('email', {
+                required: 'Vendor email is required',
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: 'Please enter a valid email address'
+                }
+              })}
+              className={`premium-input ${errors.email ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="contact@company.com"
+            />
+            {errors.email && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.email.message}</p>
+            )}
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Phone Number *</label>
+            <input
+              type="text"
+              {...register('phone', {
+                required: 'Phone number is required',
+                pattern: {
+                  value: /^\+?[0-9\s\-()]{10,20}$/,
+                  message: 'Phone number must be between 10 and 20 digits'
+                }
+              })}
+              className={`premium-input ${errors.phone ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="Primary phone number"
+            />
+            {errors.phone && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.phone.message}</p>
+            )}
+          </div>
+
+          {/* Alternate Phone */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Alternate Phone</label>
+            <input
+              type="text"
+              {...register('alternate_phone', {
+                pattern: {
+                  value: /^\+?[0-9\s\-()]{10,20}$/,
+                  message: 'Alternate phone number is invalid'
+                }
+              })}
+              className={`premium-input ${errors.alternate_phone ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+              placeholder="Secondary phone number"
+            />
+            {errors.alternate_phone && (
+              <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.alternate_phone.message}</p>
+            )}
+          </div>
+        </div>
       </section>
 
-      <div className="flex justify-end">
-        <button disabled={submitting} className="rounded-2xl bg-gradient-to-r from-[#6D5DFC] to-[#A855F7] px-6 py-3 text-sm font-black text-white shadow-lg shadow-indigo-500/25 disabled:opacity-60">
-          {submitting ? 'Saving...' : submitLabel}
+      {/* Address Details Section */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-premium hover:shadow-premium-hover transition-all duration-300">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="p-2 bg-green-50 text-primary rounded-xl">
+            <MapPin size={20} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 font-sans tracking-wide">Address Information</h2>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Address Line 1 */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Address Line 1</label>
+            <input
+              type="text"
+              {...register('address_line1')}
+              className="premium-input"
+              placeholder="Street, building details"
+            />
+          </div>
+
+          {/* Address Line 2 */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Address Line 2</label>
+            <input
+              type="text"
+              {...register('address_line2')}
+              className="premium-input"
+              placeholder="Apartment, suite, unit details"
+            />
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">City</label>
+            <input
+              type="text"
+              {...register('city')}
+              className="premium-input"
+              placeholder="City"
+            />
+          </div>
+
+          {/* State */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">State</label>
+            <input
+              type="text"
+              {...register('state')}
+              className="premium-input"
+              placeholder="State"
+            />
+          </div>
+
+          {/* Country */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Country</label>
+            <input
+              type="text"
+              {...register('country')}
+              className="premium-input"
+              placeholder="Country"
+            />
+          </div>
+
+          {/* Postal Code (pincode alias handled in parent/service) */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Postal / PIN Code</label>
+            <input
+              type="text"
+              {...register('postal_code')}
+              className="premium-input"
+              placeholder="ZIP / PIN Code"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Composite/Full Address</label>
+          <textarea
+            {...register('address')}
+            className="premium-input min-h-[90px]"
+            placeholder="Full address (auto-compiled from parts if left blank)..."
+          />
+        </div>
+      </section>
+
+      {/* Notes Section */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-premium hover:shadow-premium-hover transition-all duration-300">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="p-2 bg-green-50 text-primary rounded-xl">
+            <FileText size={20} />
+          </div>
+          <h2 className="text-lg font-black text-slate-900 font-sans tracking-wide">Procurement Notes</h2>
+        </div>
+
+        <div>
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Internal Notes / Comments</label>
+          <textarea
+            {...register('notes', {
+              maxLength: {
+                value: 2000,
+                message: 'Notes cannot exceed 2000 characters'
+              }
+            })}
+            className={`premium-input min-h-[120px] ${errors.notes ? 'border-rose-400 focus:ring-rose-200' : ''}`}
+            placeholder="Internal evaluation notes, past performance ratings, critical terms..."
+          />
+          {errors.notes && (
+            <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.notes.message}</p>
+          )}
+        </div>
+      </section>
+
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-8 py-3.5 text-sm font-black text-white hover:opacity-95 shadow-premium hover:shadow-premium-hover disabled:opacity-60 transition-all duration-300 cursor-pointer"
+        >
+          {submitting ? 'Saving changes...' : submitLabel}
         </button>
       </div>
     </form>

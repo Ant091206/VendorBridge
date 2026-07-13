@@ -21,7 +21,7 @@ dotenv.config();
 const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'Code_Vivek_24',
+  password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'vendorbridge',
   multipleStatements: true
 };
@@ -31,10 +31,10 @@ const BCRYPT_ROUNDS = 10;
 
 // ── Demo users to seed ──
 const DEMO_USERS = [
-  { name: 'Rajesh Kumar',  email: 'admin@vendorbridge.com',   password: 'Admin@123',   role: 'admin'   },
   { name: 'Priya Sharma',  email: 'officer@vendorbridge.com', password: 'Officer@123', role: 'officer' },
   { name: 'Vikram Mehta',  email: 'manager@vendorbridge.com', password: 'Manager@123', role: 'manager' },
   { name: 'Arjun Patel',   email: 'vendor1@vendorbridge.com', password: 'Vendor@123',  role: 'vendor'  },
+  { name: 'Amit Patel',    email: 'finance@vendorbridge.com', password: 'Finance@123', role: 'finance' }
 ];
 
 function log(msg) {
@@ -73,58 +73,15 @@ async function main() {
     cols.forEach(c => log(`  • ${c.Field.padEnd(20)} ${c.Type.padEnd(40)} NULL:${c.Null} DEFAULT:${c.Default}`));
 
     // Check current user count
-    const [currentUsers] = await conn.query('SELECT id, name, email, role FROM users');
+    const [currentUsers] = await conn.query('SELECT id, full_name as name, email, role FROM users');
     log(`\nExisting users (${currentUsers.length}):`);
     currentUsers.forEach(u => log(`  • [${u.id}] ${u.name} | ${u.email} | ${u.role}`));
 
     // ──────────────────────────────────────────────
-    // STEP 2: Apply migration (idempotent)
+    // STEP 2: Verify Schema Consolidation
     // ──────────────────────────────────────────────
-    banner('STEP 2: Apply Schema Migration');
-
-    // Add status column if missing
-    const hasStatus = cols.some(c => c.Field === 'status');
-    if (!hasStatus) {
-      await conn.query(`ALTER TABLE users ADD COLUMN status ENUM('active','inactive') NOT NULL DEFAULT 'active' AFTER role`);
-      log('✅ Added status column');
-    } else {
-      log('✓  status column already exists');
-    }
-
-    // Add last_login column if missing
-    const hasLastLogin = cols.some(c => c.Field === 'last_login');
-    if (!hasLastLogin) {
-      await conn.query('ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL DEFAULT NULL AFTER status');
-      log('✅ Added last_login column');
-    } else {
-      log('✓  last_login column already exists');
-    }
-
-    // Add updated_at column if missing
-    const hasUpdatedAt = cols.some(c => c.Field === 'updated_at');
-    if (!hasUpdatedAt) {
-      await conn.query('ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER last_login');
-      log('✅ Added updated_at column');
-    } else {
-      log('✓  updated_at column already exists');
-    }
-
-    // Create password_reset_tokens table if not exists
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS password_reset_tokens (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        token VARCHAR(255) NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        used BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-        UNIQUE KEY unique_token (token),
-        INDEX idx_expires (expires_at),
-        INDEX idx_user_id (user_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-    log('✅ password_reset_tokens table ready');
+    banner('STEP 2: Verify Schema Consolidation');
+    log('✓ Database schema already consolidated in schema.sql');
 
     // ──────────────────────────────────────────────
     // STEP 3: Safe data reset
@@ -138,6 +95,16 @@ async function main() {
     // Clear password_reset_tokens
     await conn.query('DELETE FROM password_reset_tokens');
     log('✅ Cleared password_reset_tokens');
+
+    if (tableNames.includes('profiles')) {
+      await conn.query('DELETE FROM profiles');
+      log('✅ Cleared profiles');
+    }
+
+    if (tableNames.includes('sessions')) {
+      await conn.query('DELETE FROM sessions');
+      log('✅ Cleared sessions');
+    }
 
     // Clear activity_logs (references users via SET NULL FK)
     if (tableNames.includes('activity_logs')) {
@@ -199,8 +166,27 @@ async function main() {
       log(`  Hash generated: ${passwordHash.substring(0, 30)}...`);
 
       const [result] = await conn.query(
-        `INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, ?, 'active')`,
+        `INSERT INTO users (full_name, email, password_hash, role, status) VALUES (?, ?, ?, ?, 'active')`,
         [user.name, user.email, passwordHash, user.role]
+      );
+
+      // Seed default profiles
+      let phone = null, company = 'VendorBridge Inc', department = 'Other', address = 'HQ, Mumbai';
+      if (user.role === 'admin') {
+        phone = '9876543210'; department = 'Administration';
+      } else if (user.role === 'officer') {
+        phone = '9876543211'; department = 'Procurement';
+      } else if (user.role === 'manager') {
+        phone = '9876543212'; department = 'Management';
+      } else if (user.role === 'vendor') {
+        phone = '9876543214'; company = 'TechVision Solutions'; department = 'Sales'; address = '42, Powai, Mumbai';
+      } else if (user.role === 'finance') {
+        phone = '9876543216'; department = 'Finance';
+      }
+
+      await conn.query(
+        `INSERT INTO profiles (user_id, phone, company, department, address) VALUES (?, ?, ?, ?, ?)`,
+        [result.insertId, phone, company, department, address]
       );
 
       seededUsers.push({
@@ -288,7 +274,7 @@ async function main() {
     banner('STEP 8: Final Verification from DB');
 
     const [finalUsers] = await conn.query(
-      'SELECT id, name, email, role, status, created_at FROM users ORDER BY id'
+      'SELECT id, full_name AS name, email, role, status, created_at FROM users ORDER BY id'
     );
 
     log(`\nTotal users in DB: ${finalUsers.length}`);
@@ -321,7 +307,7 @@ async function main() {
 
 | Status | Check |
 |--------|-------|
-| ${finalUsers.length === 4 ? '✅' : '❌'} | ${finalUsers.length}/4 users seeded |
+| ${finalUsers.length === 5 ? '✅' : '❌'} | ${finalUsers.length}/5 users seeded |
 | ${hashResults.every(h => h.bcryptMatch) ? '✅' : '❌'} | bcrypt hash verification |
 | ${hashResults.every(h => !h.bcryptWrongMatch) ? '✅' : '❌'} | bcrypt rejects wrong passwords |
 | ${jwtResults.every(j => j.jwtOk) ? '✅' : '❌'} | JWT generation & verification |
@@ -334,7 +320,7 @@ async function main() {
 |----|------|-------|------|--------|----------------|
 ${finalUsers.map(u => {
   const plain = DEMO_USERS.find(d => d.email === u.email)?.password || '—';
-  return `| ${u.id} | ${u.name} | ${u.email} | ${u.role} | ${u.status} | \`${plain}\` |`;
+  return `| ${u.id} | ${u.full_name || u.name} | ${u.email} | ${u.role} | ${u.status} | \`${plain}\` |`;
 }).join('\n')}
 
 ---
@@ -384,7 +370,7 @@ ${finalUsers.map(u => {
     finalCols.forEach(c => { md += `- \`${c.Field}\` — ${c.Type} | NULL: ${c.Null} | Default: ${c.Default || 'none'}\n`; });
 
     md += `\n---\n\n## Overall Result\n\n`;
-    const allPassed = finalUsers.length === 4
+    const allPassed = finalUsers.length === 5
       && hashResults.every(h => h.bcryptMatch && !h.bcryptWrongMatch)
       && jwtResults.every(j => j.jwtOk);
 

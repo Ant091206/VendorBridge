@@ -4,7 +4,8 @@ import {
   getAdminDashboard,
   getOfficerDashboard,
   getManagerDashboard,
-  getVendorDashboard
+  getVendorDashboard,
+  getFinanceDashboard
 } from '../controllers/dashboardController.js';
 
 const router = express.Router();
@@ -13,5 +14,6 @@ router.get('/dashboard/admin', verifyToken, restrictTo('admin'), getAdminDashboa
 router.get('/dashboard/officer', verifyToken, restrictTo('officer', 'admin'), getOfficerDashboard);
 router.get('/dashboard/manager', verifyToken, restrictTo('manager', 'admin'), getManagerDashboard);
 router.get('/dashboard/vendor', verifyToken, restrictTo('vendor', 'admin'), getVendorDashboard);
+router.get('/dashboard/finance', verifyToken, restrictTo('finance', 'admin'), getFinanceDashboard);
 
 export default router;

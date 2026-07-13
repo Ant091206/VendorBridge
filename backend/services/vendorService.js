@@ -6,6 +6,8 @@ const allowedVendorSorts = {
   company_name: 'v.company_name',
   created_at: 'v.created_at',
   city: 'v.city',
+  state: 'v.state',
+  vendor_code: 'v.vendor_code',
   status: 'v.status'
 };
 
@@ -13,6 +15,12 @@ const toPagination = (query) => {
   const page = Math.max(Number.parseInt(query.page, 10) || 1, 1);
   const limit = Math.min(Math.max(Number.parseInt(query.limit, 10) || 10, 1), 100);
   return { page, limit, offset: (page - 1) * limit };
+};
+
+export const generateVendorCode = async () => {
+  const [rows] = await db.execute('SELECT id FROM vendors ORDER BY id DESC LIMIT 1');
+  const nextId = rows.length > 0 ? rows[0].id + 1 : 1;
+  return `VEN-${String(nextId).padStart(4, '0')}`;
 };
 
 export const listVendors = async (query, user) => {
@@ -25,10 +33,10 @@ export const listVendors = async (query, user) => {
   if (query.search) {
     conditions.push(`(
       v.vendor_name LIKE ? OR v.company_name LIKE ? OR v.gst_number LIKE ? OR
-      v.name LIKE ? OR v.email LIKE ? OR v.vendor_code LIKE ?
+      v.name LIKE ? OR v.email LIKE ? OR v.vendor_code LIKE ? OR v.phone LIKE ?
     )`);
     const term = `%${query.search}%`;
-    params.push(term, term, term, term, term, term);
+    params.push(term, term, term, term, term, term, term);
   }
 
   if (query.status) {
@@ -46,6 +54,11 @@ export const listVendors = async (query, user) => {
     params.push(query.city);
   }
 
+  if (query.state) {
+    conditions.push('v.state = ?');
+    params.push(query.state);
+  }
+
   if (user.role === 'vendor') {
     conditions.push('v.email = ?');
     params.push(user.email);
@@ -58,7 +71,7 @@ export const listVendors = async (query, user) => {
     params
   );
 
-  const [rows] = await db.execute(
+  const [rows] = await db.query(
     `SELECT
        v.id,
        v.vendor_code,
@@ -80,14 +93,19 @@ export const listVendors = async (query, user) => {
        v.state,
        v.country,
        v.postal_code,
+       v.postal_code AS pincode,
+       v.notes,
        v.status,
        v.created_by,
        u.name AS created_by_name,
+       v.updated_by,
+       u2.name AS updated_by_name,
        v.created_at,
        v.updated_at
      FROM vendors v
      LEFT JOIN vendor_categories vc ON vc.id = v.category_id
      LEFT JOIN users u ON u.id = v.created_by
+     LEFT JOIN users u2 ON u2.id = v.updated_by
      ${where}
      ORDER BY ${sortColumn} ${direction}
      LIMIT ? OFFSET ?`,
@@ -117,14 +135,17 @@ export const getVendor = async (id, user) => {
   const [rows] = await db.execute(
     `SELECT
        v.*,
+       v.postal_code AS pincode,
        COALESCE(v.vendor_name, v.name) AS vendor_name,
        COALESCE(v.company_name, v.name) AS company_name,
        COALESCE(v.name, v.vendor_name) AS name,
        vc.name AS category_name,
-       u.name AS created_by_name
+       u.name AS created_by_name,
+       u2.name AS updated_by_name
      FROM vendors v
      LEFT JOIN vendor_categories vc ON vc.id = v.category_id
      LEFT JOIN users u ON u.id = v.created_by
+     LEFT JOIN users u2 ON u2.id = v.updated_by
      WHERE v.id = ? ${roleFilter}`,
     params
   );
@@ -166,21 +187,21 @@ const ensureVendorUniqueness = async (payload, currentId = null) => {
   }
 };
 
-const normalizeVendor = (payload, userId) => {
-  const address = [payload.address_line1, payload.address_line2, payload.city, payload.state, payload.country, payload.postal_code]
+const normalizeVendor = (payload, userId, isUpdate = false) => {
+  const address = [payload.address_line1, payload.address_line2, payload.city, payload.state, payload.country, payload.postal_code || payload.pincode]
     .filter(Boolean)
     .join(', ');
 
   return {
-    vendor_code: payload.vendor_code.trim(),
-    vendor_name: payload.vendor_name.trim(),
-    company_name: payload.company_name.trim(),
-    legacy_name: payload.vendor_name.trim(),
+    vendor_code: payload.vendor_code?.trim() || '',
+    vendor_name: payload.vendor_name?.trim() || '',
+    company_name: payload.company_name?.trim() || '',
+    legacy_name: payload.vendor_name?.trim() || '',
     category_id: payload.category_id || null,
-    gst_number: payload.gst_number.trim(),
-    pan_number: payload.pan_number || null,
+    gst_number: payload.gst_number?.trim() || '',
+    pan_number: payload.pan_number?.trim() || null,
     contact_person: payload.contact_person || null,
-    email: payload.email.trim().toLowerCase(),
+    email: payload.email?.trim().toLowerCase() || '',
     phone: payload.phone || '',
     alternate_phone: payload.alternate_phone || null,
     address: payload.address || address,
@@ -189,29 +210,36 @@ const normalizeVendor = (payload, userId) => {
     city: payload.city || null,
     state: payload.state || null,
     country: payload.country || 'India',
-    postal_code: payload.postal_code || null,
+    postal_code: payload.postal_code || payload.pincode || null,
     status: payload.status || 'active',
-    created_by: userId
+    notes: payload.notes || null,
+    created_by: isUpdate ? undefined : userId,
+    updated_by: isUpdate ? userId : null
   };
 };
 
 export const createVendorRecord = async (payload, user) => {
   await ensureCategoryExists(payload.category_id);
+
+  if (!payload.vendor_code?.trim()) {
+    payload.vendor_code = await generateVendorCode();
+  }
+
   await ensureVendorUniqueness(payload);
 
-  const vendor = normalizeVendor(payload, user.id);
+  const vendor = normalizeVendor(payload, user.id, false);
   const [result] = await db.execute(
     `INSERT INTO vendors (
       vendor_code, vendor_name, company_name, name, category_id, gst_number, pan_number,
       contact_person, email, phone, alternate_phone, address, address_line1, address_line2,
-      city, state, country, postal_code, status, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      city, state, country, postal_code, notes, status, created_by, updated_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       vendor.vendor_code, vendor.vendor_name, vendor.company_name, vendor.legacy_name,
       vendor.category_id, vendor.gst_number, vendor.pan_number, vendor.contact_person,
       vendor.email, vendor.phone, vendor.alternate_phone, vendor.address, vendor.address_line1,
       vendor.address_line2, vendor.city, vendor.state, vendor.country, vendor.postal_code,
-      vendor.status, vendor.created_by
+      vendor.notes, vendor.status, vendor.created_by, vendor.updated_by
     ]
   );
 
@@ -229,27 +257,38 @@ export const updateVendorRecord = async (id, payload, user) => {
   await ensureCategoryExists(payload.category_id);
   await ensureVendorUniqueness(payload, id);
 
-  const vendor = normalizeVendor(payload, existing.created_by || user.id);
+  const vendor = normalizeVendor(payload, user.id, true);
   await db.execute(
     `UPDATE vendors
      SET vendor_code = ?, vendor_name = ?, company_name = ?, name = ?, category_id = ?,
          gst_number = ?, pan_number = ?, contact_person = ?, email = ?, phone = ?,
          alternate_phone = ?, address = ?, address_line1 = ?, address_line2 = ?, city = ?,
-         state = ?, country = ?, postal_code = ?, status = ?
+         state = ?, country = ?, postal_code = ?, notes = ?, status = ?, updated_by = ?
      WHERE id = ?`,
     [
       vendor.vendor_code, vendor.vendor_name, vendor.company_name, vendor.legacy_name,
       vendor.category_id, vendor.gst_number, vendor.pan_number, vendor.contact_person,
       vendor.email, vendor.phone, vendor.alternate_phone, vendor.address, vendor.address_line1,
       vendor.address_line2, vendor.city, vendor.state, vendor.country, vendor.postal_code,
-      vendor.status, id
+      vendor.notes, vendor.status, vendor.updated_by, id
     ]
   );
 
   return getVendor(id, user);
 };
 
-export const deleteVendorRecord = async (id) => {
+export const patchVendorStatus = async (id, status, userId, user) => {
+  const [rows] = await db.execute('SELECT id, status FROM vendors WHERE id = ?', [id]);
+  if (rows.length === 0) {
+    const error = new Error('Vendor not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  await db.execute('UPDATE vendors SET status = ?, updated_by = ? WHERE id = ?', [status, userId, id]);
+  return getVendor(id, user);
+};
+
+export const deleteVendorRecord = async (id, userId) => {
   const [rows] = await db.execute('SELECT id FROM vendors WHERE id = ?', [id]);
   if (rows.length === 0) {
     const error = new Error('Vendor not found.');
@@ -257,12 +296,17 @@ export const deleteVendorRecord = async (id) => {
     throw error;
   }
 
-  await db.execute("UPDATE vendors SET status = 'inactive' WHERE id = ?", [id]);
+  await db.execute("UPDATE vendors SET status = 'inactive', updated_by = ? WHERE id = ?", [userId, id]);
 };
 
 export const listCategories = async () => {
-  const [rows] = await db.execute('SELECT id, name, description, created_at FROM vendor_categories ORDER BY name ASC');
+  const [rows] = await db.execute('SELECT id, name, description, created_at, updated_at FROM vendor_categories ORDER BY name ASC');
   return rows;
+};
+
+export const getCategoryById = async (id) => {
+  const [rows] = await db.execute('SELECT id, name, description, created_at, updated_at FROM vendor_categories WHERE id = ?', [id]);
+  return rows[0] || null;
 };
 
 export const createCategoryRecord = async (payload) => {

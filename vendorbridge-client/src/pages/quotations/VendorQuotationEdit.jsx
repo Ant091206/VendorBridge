@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Info, Calendar, DollarSign, Clock, FileText, Upload, AlertCircle } from 'lucide-react';
-import { getQuotationById, updateQuotation } from '../../api/quotationApi';
-import PageHeader from '../../components/PageHeader';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { ChevronLeft, Info, Calendar, DollarSign, Clock, FileText, Upload, AlertCircle, Trash2, X } from 'lucide-react';
+import { getQuotationById, updateQuotation, uploadQuotationAttachment, deleteQuotationAttachment, withdrawQuotationStatus } from '../../api/quotationApi';
+import { calculateQuotationAmounts } from '../../utils/priceCalculator';
 import Toast from '../../components/Toast';
 import Spinner from '../../components/Spinner';
 
@@ -10,18 +10,21 @@ const VendorQuotationEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Quotation & RFQ details state
   const [quotation, setQuotation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states
-  const [unitPrice, setUnitPrice] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [items, setItems] = useState([]);
   const [deliveryDays, setDeliveryDays] = useState('');
+  const [currency, setCurrency] = useState('INR');
   const [notes, setNotes] = useState('');
-  const [attachment, setAttachment] = useState(null);
-  const [attachmentName, setAttachmentName] = useState('');
+  const [termsConditions, setTermsConditions] = useState('');
+
+  // Attachments states
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [attachmentsToDelete, setAttachmentsToDelete] = useState([]);
+  const [newFiles, setNewFiles] = useState([]);
 
   // Page interaction states
   const [errors, setErrors] = useState({});
@@ -34,13 +37,26 @@ const VendorQuotationEdit = () => {
         const qData = res.data;
         setQuotation(qData);
         if (qData) {
-          setUnitPrice(qData.unit_price || '');
-          setQuantity(qData.quantity || '');
           setDeliveryDays(qData.delivery_days || '');
+          setCurrency(qData.currency || 'INR');
           setNotes(qData.notes || '');
-          if (qData.attachment_url) {
-            setAttachmentName(qData.attachment_url.split('_').pop() || 'Existing PDF');
-          }
+          setTermsConditions(qData.terms_conditions || '');
+          setExistingAttachments(qData.attachments || []);
+          
+          // Map quotation items
+          const mappedItems = (qData.items || []).map((item) => ({
+            id: item.id,
+            rfq_item_id: item.rfq_item_id,
+            item_name: item.item_name,
+            description: item.rfq_item_desc || '',
+            unit: item.unit,
+            quantity: Number(item.quantity) || 1,
+            unit_price: Number(item.unit_price) || '',
+            tax_percentage: Number(item.tax_percentage) || 0,
+            discount_percentage: Number(item.discount_percentage) || 0,
+            total_amount: Number(item.total_amount) || 0
+          }));
+          setItems(mappedItems);
         }
       } catch (err) {
         console.error(err);
@@ -53,55 +69,84 @@ const VendorQuotationEdit = () => {
     fetchQuotation();
   }, [id]);
 
-  // Real-time calculated total price
-  const totalPrice = Number(unitPrice) * Number(quantity);
+  // Central calculations whenever items list updates
+  const calculations = React.useMemo(() => {
+    return calculateQuotationAmounts(items);
+  }, [items]);
 
+  const handleItemFieldChange = (index, field, value) => {
+    setItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item;
+        const updated = { ...item, [field]: value };
+        // Perform calculation for single item total
+        const qty = parseFloat(updated.quantity) || 0;
+        const price = parseFloat(updated.unit_price) || 0;
+        const taxPct = parseFloat(updated.tax_percentage) || 0;
+        const discPct = parseFloat(updated.discount_percentage) || 0;
+
+        const base = qty * price;
+        const disc = base * (discPct / 100);
+        const taxable = base - disc;
+        const tax = taxable * (taxPct / 100);
+        updated.total_amount = Number((taxable + tax).toFixed(2));
+        return updated;
+      })
+    );
+  };
+
+  // Attachments Handlers
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.type !== 'application/pdf') {
-        setErrors(prev => ({ ...prev, attachment: 'Only PDF documents are allowed.' }));
+    if (e.target.files) {
+      const filesArr = Array.from(e.target.files);
+      const invalidFiles = filesArr.filter((f) => f.size > 10 * 1024 * 1024); // 10MB limit
+      if (invalidFiles.length > 0) {
+        setToast({ message: 'One or more files exceed the 10MB size limit.', type: 'error' });
         return;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, attachment: 'Document size must be less than 5MB.' }));
-        return;
-      }
-      setAttachment(file);
-      setAttachmentName(file.name);
-      setErrors(prev => ({ ...prev, attachment: null }));
+      setNewFiles((prev) => [...prev, ...filesArr]);
     }
+  };
+
+  const handleRemoveNewFile = (idx) => {
+    setNewFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleRemoveExistingAttachment = (attId) => {
+    setExistingAttachments((prev) => prev.filter((att) => att.id !== attId));
+    setAttachmentsToDelete((prev) => [...prev, attId]);
   };
 
   const validateForm = () => {
     const newErrors = {};
 
-    const price = Number(unitPrice);
-    if (!unitPrice) {
-      newErrors.unitPrice = 'Unit Price is required.';
-    } else if (isNaN(price) || price <= 0) {
-      newErrors.unitPrice = 'Unit Price must be a positive number greater than 0.';
-    }
-
-    const qty = Number(quantity);
-    if (!quantity) {
-      newErrors.quantity = 'Quantity is required.';
-    } else if (isNaN(qty) || qty <= 0 || !Number.isInteger(qty)) {
-      newErrors.quantity = 'Quantity must be a positive whole integer.';
-    }
-
     const days = Number(deliveryDays);
     if (!deliveryDays) {
-      newErrors.deliveryDays = 'Delivery Days estimate is required.';
+      newErrors.deliveryDays = 'Delivery timeline is required.';
     } else if (isNaN(days) || days <= 0 || !Number.isInteger(days)) {
-      newErrors.deliveryDays = 'Delivery Days must be a positive whole integer.';
+      newErrors.deliveryDays = 'Delivery timeline must be a positive integer greater than 0.';
+    }
+
+    if (items.length === 0) {
+      newErrors.items = 'At least one item response is required.';
+    } else {
+      items.forEach((item, index) => {
+        const price = Number(item.unit_price);
+        if (item.unit_price === '' || isNaN(price) || price <= 0) {
+          newErrors[`item_${index}_price`] = 'Unit price must be > 0';
+        }
+        const qty = Number(item.quantity);
+        if (item.quantity === '' || isNaN(qty) || qty <= 0) {
+          newErrors[`item_${index}_qty`] = 'Quantity must be > 0';
+        }
+      });
     }
 
     if (quotation) {
       if (quotation.status !== 'draft' && quotation.status !== 'submitted') {
         newErrors.quotation = `Selected or rejected quotations cannot be modified. Status is: ${quotation.status}`;
       }
-      if (new Date(quotation.rfq_deadline) < new Date()) {
+      if (quotation.rfq_deadline && new Date(quotation.rfq_deadline) < new Date()) {
         newErrors.quotation = 'Quotation editing is disabled because the RFQ deadline has passed.';
       }
     }
@@ -110,21 +155,50 @@ const VendorQuotationEdit = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+  const handleSubmit = async (e, forceStatus = null) => {
+    if (e) e.preventDefault();
+    if (!validateForm()) {
+      setToast({ message: 'Please fix validation errors before submitting.', type: 'error' });
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const targetStatus = forceStatus || quotation.status;
+
       const payload = {
-        unit_price: parseFloat(unitPrice),
-        quantity: parseInt(quantity),
         delivery_days: parseInt(deliveryDays),
+        currency,
         notes: notes || null,
-        attachment_url: attachmentName ? (attachment ? `/uploads/attachments/${Date.now()}_${attachmentName}` : quotation.attachment_url) : null
+        terms_conditions: termsConditions || null,
+        status: targetStatus,
+        items: items.map((item) => ({
+          rfq_item_id: item.rfq_item_id,
+          quantity: parseFloat(item.quantity),
+          unit_price: parseFloat(item.unit_price),
+          tax_percentage: parseFloat(item.tax_percentage) || 0,
+          discount_percentage: parseFloat(item.discount_percentage) || 0
+        }))
       };
 
       await updateQuotation(id, payload);
+
+      // Perform physical attachment deletions
+      if (attachmentsToDelete.length > 0) {
+        for (const attId of attachmentsToDelete) {
+          await deleteQuotationAttachment(attId);
+        }
+      }
+
+      // Perform new attachment uploads
+      if (newFiles.length > 0) {
+        for (const file of newFiles) {
+          const fileFormData = new FormData();
+          fileFormData.append('file', file);
+          await uploadQuotationAttachment(id, fileFormData);
+        }
+      }
+
       setToast({ message: 'Quotation updated successfully!', type: 'success' });
       setTimeout(() => {
         navigate('/quotations/vendor');
@@ -132,19 +206,28 @@ const VendorQuotationEdit = () => {
     } catch (err) {
       console.error(err);
       setToast({ message: err.message || 'Failed to update quotation.', type: 'error' });
+    } finally {
       setSubmitting(false);
     }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const handleWithdraw = async () => {
+    if (!window.confirm('Are you sure you want to withdraw this quotation? This will retract your bid from the procurement team.')) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await withdrawQuotationStatus(id);
+      setToast({ message: 'Quotation withdrawn successfully!', type: 'success' });
+      setTimeout(() => {
+        navigate('/quotations/vendor');
+      }, 1500);
+    } catch (err) {
+      console.error(err);
+      setToast({ message: err.message || 'Failed to withdraw quotation.', type: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -161,17 +244,17 @@ const VendorQuotationEdit = () => {
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8 bg-white border border-slate-200 rounded-[24px] shadow-sm">
         <h2 className="text-xl font-black text-slate-900 mb-2">Quotation Not Found</h2>
         <p className="text-sm font-semibold text-slate-500 mb-6">We could not retrieve details for this quotation.</p>
-        <button onClick={() => navigate('/quotations/vendor')} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">Back to Quotations</button>
+        <button onClick={() => navigate('/quotations/vendor')} className="rounded-2xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors">Back to My Quotes</button>
       </div>
     );
   }
 
-  const deadlinePassed = new Date(quotation.rfq_deadline) < new Date();
+  const isDeadlinePassed = quotation.rfq_deadline && new Date(quotation.rfq_deadline) < new Date();
   const notEditable = quotation.status !== 'draft' && quotation.status !== 'submitted';
-  const isBlocked = deadlinePassed || notEditable;
+  const isBlocked = isDeadlinePassed || notEditable;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-12">
+    <div className="mx-auto max-w-5xl space-y-6 pb-12">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -181,200 +264,371 @@ const VendorQuotationEdit = () => {
           <ChevronLeft size={20} />
         </button>
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#6D5DFC]">Quotation: {quotation.quotation_number}</p>
-          <h1 className="text-3xl font-black text-slate-950 mt-1">Edit Bidding Quotation</h1>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">Edit Quotation</p>
+          <h1 className="text-3xl font-black text-slate-950 mt-1">{quotation.quotation_number}</h1>
         </div>
       </div>
 
       {isBlocked && (
         <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-bold text-rose-700">
           <AlertCircle size={18} className="shrink-0" />
-          <span>{notEditable ? `Quotation cannot be edited because it is ${quotation.status}.` : 'Editing is disabled because the RFQ deadline has passed.'}</span>
+          <span>
+            {notEditable
+              ? `Quotation cannot be edited because it is in status: ${quotation.status}.`
+              : 'Editing is disabled because the RFQ deadline has passed.'}
+          </span>
+        </div>
+      )}
+
+      {errors.quotation && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+          {errors.quotation}
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Main form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-6">
           {/* Section 1: RFQ Summary */}
-          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-4">
-            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2">
-              <Info size={18} className="text-[#6D5DFC]" /> Section 1: RFQ Summary
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-premium space-y-4">
+            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Info size={18} className="text-primary" /> RFQ Information
             </h2>
             <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
               <h3 className="text-base font-black text-slate-900">{quotation.rfq_title}</h3>
               <p className="text-sm font-semibold text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{quotation.rfq_number}</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Target Quantity</span>
-                <span className="mt-1 block text-sm font-black text-slate-800 font-mono">{quotation.rfq_qty} units</span>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-2 text-xs font-bold text-slate-500">
               <div className="rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3">
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">RFQ Status</span>
-                <span className="mt-1 block text-sm font-black capitalize text-slate-800">{quotation.rfq_status}</span>
+                <span className="mt-1 block text-sm font-black text-slate-800 capitalize">{quotation.rfq_status}</span>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Submission Date</span>
+                <span className="mt-1 block text-sm font-black text-slate-800">
+                  {quotation.submission_date ? new Date(quotation.submission_date).toLocaleString() : 'Not Submitted'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Pricing */}
-          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-4">
-            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2">
-              <DollarSign size={18} className="text-[#6D5DFC]" /> Section 2: Pricing
+          {/* Section 2: Quoted Items */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-premium space-y-4">
+            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <DollarSign size={18} className="text-primary" /> Quoted Items & Pricing
+            </h2>
+            
+            {errors.items && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+                {errors.items}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {items.map((item, index) => (
+                <div key={index} className="rounded-2xl border border-slate-150 p-4 bg-slate-50/50 space-y-3">
+                  <div className="flex justify-between items-center border-b border-slate-200/50 pb-2">
+                    <span className="text-xs font-black text-slate-800">
+                      Item #{index + 1}: <span className="text-primary">{item.item_name}</span>
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-slate-200/80 text-slate-600 px-2 py-0.5 rounded">
+                      Unit: {item.unit}
+                    </span>
+                  </div>
+                  {item.description && (
+                    <p className="text-xs text-slate-500 font-bold mb-2">Specs: {item.description}</p>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Unit Price (₹) *</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={item.unit_price}
+                        onChange={(e) => handleItemFieldChange(index, 'unit_price', e.target.value)}
+                        disabled={isBlocked}
+                        placeholder="0.00"
+                        className={`premium-input text-xs py-2 ${errors[`item_${index}_price`] ? 'border-rose-400' : ''}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Bidding Qty *</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={item.quantity}
+                        onChange={(e) => handleItemFieldChange(index, 'quantity', e.target.value)}
+                        disabled={isBlocked}
+                        className={`premium-input text-xs py-2 ${errors[`item_${index}_qty`] ? 'border-rose-400' : ''}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Tax (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={item.tax_percentage}
+                        onChange={(e) => handleItemFieldChange(index, 'tax_percentage', e.target.value)}
+                        disabled={isBlocked}
+                        className="premium-input text-xs py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Discount (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={item.discount_percentage}
+                        onChange={(e) => handleItemFieldChange(index, 'discount_percentage', e.target.value)}
+                        disabled={isBlocked}
+                        className="premium-input text-xs py-2"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2 text-xs font-bold text-slate-500">
+                    Calculated Item Total: <span className="text-slate-800 font-black ml-1.5 font-mono">{formatCurrency(item.total_amount || 0)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Calculations Banner */}
+            <div className="rounded-2xl border border-slate-100 bg-primary/5 p-4 space-y-2 text-xs">
+              <div className="flex justify-between font-bold text-slate-500">
+                <span>Subtotal (Base Price)</span>
+                <span className="font-mono">{formatCurrency(calculations.subtotal)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-slate-500">
+                <span>Discount Amount (-)</span>
+                <span className="font-mono text-rose-650">{formatCurrency(calculations.discount_amount)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-slate-500">
+                <span>Tax Amount (+)</span>
+                <span className="font-mono text-emerald-650">{formatCurrency(calculations.tax_amount)}</span>
+              </div>
+              <div className="border-t border-slate-200/60 my-2 pt-2 flex justify-between font-black text-sm text-slate-900">
+                <span>Calculated Grand Total</span>
+                <span className="text-[#22C55E] font-mono text-lg">{formatCurrency(calculations.grand_total)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Delivery Information */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-premium space-y-4">
+            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Clock size={18} className="text-primary" /> Delivery Information
             </h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Unit Price (₹) <span className="text-rose-500">*</span></label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-sm font-bold text-slate-400">₹</span>
-                  <input
-                    type="number"
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(e.target.value)}
-                    disabled={isBlocked}
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0.01"
-                    className={`h-12 w-full rounded-2xl border bg-slate-50 pl-8 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#6D5DFC] focus:bg-white disabled:opacity-60 ${errors.unitPrice ? 'border-rose-500' : 'border-slate-200'}`}
-                  />
-                </div>
-                {errors.unitPrice && <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.unitPrice}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Bidding Quantity <span className="text-rose-500">*</span></label>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Estimated Delivery Days *</label>
                 <input
                   type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  disabled={isBlocked}
-                  placeholder={quotation.rfq_qty}
-                  step="1"
                   min="1"
-                  className={`h-12 w-full rounded-2xl border bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#6D5DFC] focus:bg-white disabled:opacity-60 ${errors.quantity ? 'border-rose-500' : 'border-slate-200'}`}
+                  step="1"
+                  value={deliveryDays}
+                  onChange={(e) => setDeliveryDays(e.target.value)}
+                  disabled={isBlocked}
+                  className={`premium-input ${errors.deliveryDays ? 'border-rose-400' : ''}`}
                 />
-                {errors.quantity && <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.quantity}</p>}
+                {errors.deliveryDays && <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.deliveryDays}</p>}
               </div>
-            </div>
-
-            {/* Auto Calculate Total Value */}
-            <div className="rounded-2xl border border-slate-100 bg-[#6D5DFC]/5 px-5 py-4 flex items-center justify-between">
               <div>
-                <span className="block text-[11px] font-black uppercase tracking-wider text-slate-500">Calculated Total Value</span>
-                <span className="text-[10px] font-bold text-slate-400 mt-0.5">Auto computed (Unit Price × Quantity)</span>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Currency</label>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  disabled={isBlocked}
+                  className="premium-input cursor-pointer"
+                >
+                  <option value="INR">INR (₹)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                </select>
               </div>
-              <span className="text-2xl font-black text-[#6D5DFC] font-mono">
-                {formatCurrency(totalPrice || 0)}
-              </span>
             </div>
           </div>
 
-          {/* Section 3: Delivery */}
-          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-4">
-            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2">
-              <Clock size={18} className="text-[#6D5DFC]" /> Section 3: Delivery
+          {/* Section 4: Notes and Terms */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-premium space-y-4">
+            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <FileText size={18} className="text-primary" /> Terms & Comments
             </h2>
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Estimated Delivery Days <span className="text-rose-500">*</span></label>
-              <input
-                type="number"
-                value={deliveryDays}
-                onChange={(e) => setDeliveryDays(e.target.value)}
-                disabled={isBlocked}
-                placeholder="e.g., 15"
-                step="1"
-                min="1"
-                className={`h-12 w-full rounded-2xl border bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#6D5DFC] focus:bg-white disabled:opacity-60 ${errors.deliveryDays ? 'border-rose-500' : 'border-slate-200'}`}
-              />
-              {errors.deliveryDays && <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.deliveryDays}</p>}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Technical / Commercial Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  disabled={isBlocked}
+                  rows={3}
+                  className="premium-input min-h-[80px]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Terms & Conditions</label>
+                <textarea
+                  value={termsConditions}
+                  onChange={(e) => setTermsConditions(e.target.value)}
+                  disabled={isBlocked}
+                  rows={3}
+                  className="premium-input min-h-[80px]"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Section 4: Notes */}
-          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-4">
-            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2">
-              <FileText size={18} className="text-[#6D5DFC]" /> Section 4: Notes
+          {/* Section 5: Attachments */}
+          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-premium space-y-4">
+            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Upload size={18} className="text-primary" /> Quotation Attachments
             </h2>
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Additional Comments / Remarks</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={isBlocked}
-                placeholder="Logistics terms, packaging specifications, warranty policies, etc."
-                rows={4}
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-[#6D5DFC] focus:bg-white disabled:opacity-60 resize-none"
-              />
-            </div>
-          </div>
+            
+            {/* Existing attachments */}
+            {existingAttachments.length > 0 && (
+              <div className="space-y-2 pb-2 border-b border-slate-100">
+                <span className="block text-xs font-black uppercase tracking-wider text-slate-400">Uploaded Files</span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {existingAttachments.map((att) => (
+                    <div key={att.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-semibold">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText size={16} className="text-slate-400 shrink-0" />
+                        <span className="text-slate-700 truncate" title={att.file_name}>{att.file_name}</span>
+                      </div>
+                      {!isBlocked && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExistingAttachment(att.id)}
+                          className="text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {/* Section 5: Attachment */}
-          <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-4">
-            <h2 className="text-lg font-black text-slate-950 flex items-center gap-2">
-              <Upload size={18} className="text-[#6D5DFC]" /> Section 5: Attachment
-            </h2>
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Upload Quotation Document (Optional PDF)</label>
-              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center hover:bg-slate-50 transition cursor-pointer relative">
+            {/* Drag & drop new uploader */}
+            {!isBlocked && (
+              <div className="border-2 border-dashed border-slate-200 hover:border-primary/40 rounded-3xl p-6 text-center bg-slate-50/50 hover:bg-slate-50 transition relative group cursor-pointer">
                 <input
                   type="file"
+                  multiple
                   onChange={handleFileChange}
-                  disabled={isBlocked}
-                  accept=".pdf"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
-                <Upload size={28} className="text-slate-400 mb-3" />
-                <span className="text-sm font-black text-slate-800">
-                  {attachmentName ? attachmentName : 'Drag and drop or click to upload'}
-                </span>
-                <span className="text-xs font-bold text-slate-400 mt-1">PDF file, maximum 5MB size limit.</span>
+                <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
+                  <Upload size={28} className="text-slate-400 group-hover:text-primary transition-colors" />
+                  <p className="text-sm font-bold text-slate-700">Click or drag new proposal documents here</p>
+                  <p className="text-xs font-semibold">Supports PDFs, Excel, Zip and Images up to 10MB each.</p>
+                </div>
               </div>
-              {errors.attachment && <p className="mt-1.5 text-xs font-bold text-rose-600">{errors.attachment}</p>}
-            </div>
+            )}
+
+            {newFiles.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">New Files to Upload ({newFiles.length})</h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {newFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-2xl border border-primary/20 bg-green-50/10 text-xs font-semibold">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText size={16} className="text-primary shrink-0" />
+                        <span className="text-slate-750 truncate" title={file.name}>{file.name}</span>
+                        <span className="text-[10px] text-slate-400 font-bold shrink-0">
+                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveNewFile(idx)}
+                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer shrink-0"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-3 border-t border-slate-100 pt-6">
-            <button
-              type="button"
-              onClick={() => navigate('/quotations/vendor')}
-              className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            {!isBlocked && (
+          <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+            <div>
+              {quotation.status === 'submitted' && !isBlocked && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleWithdraw}
+                  className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700 hover:bg-rose-100 transition shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  Withdraw Bid
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3">
               <button
-                type="submit"
-                disabled={submitting}
-                className="rounded-2xl bg-gradient-to-r from-[#6D5DFC] to-[#A855F7] px-6 py-3 text-sm font-black text-white shadow-lg shadow-indigo-500/20 hover:from-[#5b4deb] hover:to-[#9946e6] transition-all disabled:opacity-50"
+                type="button"
+                onClick={() => navigate('/quotations/vendor')}
+                className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
-                Save Changes
+                Cancel
               </button>
-            )}
+              {!isBlocked && (
+                <>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={(e) => handleSubmit(e, quotation.status === 'submitted' ? 'submitted' : 'draft')}
+                    className="rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    Save Changes
+                  </button>
+                  {quotation.status === 'draft' && (
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={(e) => handleSubmit(e, 'submitted')}
+                      className="rounded-2xl bg-primary px-6 py-3 text-sm font-black text-white shadow-lg shadow-green-500/20 hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      Submit Quotation
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-        </form>
+        </div>
 
-        {/* Info Sidebar */}
+        {/* Sidebar */}
         <div className="space-y-6">
-          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-4">
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-premium space-y-4">
             <h3 className="text-base font-black text-slate-950">Closing Details</h3>
-            <div className="space-y-3.5 text-sm">
-              <div className="flex items-start gap-3">
-                <Calendar size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="block text-xs font-black uppercase tracking-wider text-slate-400">Deadline</span>
-                  <span className="mt-0.5 block font-bold text-slate-800">{formatDate(quotation.rfq_deadline)}</span>
-                </div>
+            <div className="flex items-start gap-3 text-sm font-semibold">
+              <Calendar size={16} className="text-slate-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Bid Deadline</span>
+                <span className={`block mt-0.5 ${isDeadlinePassed ? 'text-rose-600 font-bold' : 'text-slate-800'}`}>
+                  {quotation.rfq_deadline ? new Date(quotation.rfq_deadline).toLocaleString() : 'N/A'}
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.06)] space-y-3">
+          <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-premium space-y-3">
             <h3 className="text-base font-black text-slate-950">Bidding Rules</h3>
             <ul className="list-disc list-inside text-xs font-bold text-slate-500 space-y-2.5 leading-relaxed">
-              <li>Quotations can be edited any number of times before the RFQ deadline.</li>
-              <li>Once selected or rejected by the procurement officer, edits are locked.</li>
-              <li>Unit pricing and delivery schedules must be positive whole values.</li>
+              <li>Active bids can be edited, updated, or withdrawn before the deadline.</li>
+              <li>Withdrawing retracts your proposal. You may edit and re-submit it later.</li>
+              <li>Quotations become completely locked for edits once the RFQ deadline is reached.</li>
             </ul>
           </div>
         </div>

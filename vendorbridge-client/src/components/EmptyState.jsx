@@ -1,30 +1,36 @@
 import React from 'react';
+import { InboxIcon } from 'lucide-react';
 
 /**
- * EmptyState Component
- * Reusable empty state display for tables/lists with no data.
+ * EmptyState — Reusable empty placeholder for tables/lists.
  *
  * Props:
- *   icon        {string}   — Emoji icon (e.g. '📋')
- *   title       {string}   — Heading text
- *   message     {string}   — Description text
- *   actionLabel {string}   — Label for the action button (optional)
- *   onAction    {function} — Click handler for the action button (optional)
+ *   icon        — Lucide icon component (defaults to InboxIcon)
+ *   title       — Heading text
+ *   message     — Description text
+ *   actionLabel — Button label (optional)
+ *   onAction    — Button click handler (optional)
  */
-const EmptyState = ({ icon = '📂', title = 'No Data Found', message, actionLabel, onAction }) => {
+const EmptyState = ({
+  icon: Icon = InboxIcon,
+  title = 'No data found',
+  message,
+  actionLabel,
+  onAction,
+}) => {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 py-16 px-8 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-800/60 text-3xl mb-5 shadow-inner">
-        {icon}
+    <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F3F4F6] text-[#9CA3AF] mb-3">
+        <Icon size={20} strokeWidth={1.5} />
       </div>
-      <h3 className="text-lg font-bold text-white">{title}</h3>
+      <h3 className="text-sm font-semibold text-[#374151]">{title}</h3>
       {message && (
-        <p className="mt-2 text-sm text-slate-400 max-w-sm">{message}</p>
+        <p className="mt-1 text-sm text-[#9CA3AF] max-w-xs">{message}</p>
       )}
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="mt-6 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition shadow-md shadow-indigo-600/20"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-[6px] bg-[#16A34A] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#15803D] transition-colors duration-100 cursor-pointer"
         >
           {actionLabel}
         </button>

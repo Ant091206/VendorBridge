@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { getMyInvoices } from '../../api/invoiceApi';
-import { downloadInvoicePDF } from '../../utils/downloadPDF';
+import { getMyInvoices, downloadInvoicePDF } from '../../api/invoiceApi';
 import Spinner from '../../components/Spinner';
 import Toast from '../../components/Toast';
 

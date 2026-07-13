@@ -31,9 +31,9 @@ async function getRfqCreatorUserId(rfqId) {
 /**
  * Utility to write activity log and dispatch notifications to appropriate roles.
  */
-export async function logAndNotify(userId, { action, module, entityType, entityId, description, ipAddress }) {
+export async function logAndNotify(userId, { action, module, entityType, entityId, description, ipAddress, oldValue = null, newValue = null, deviceInfo = null }) {
   // 1. Log Activity
-  await logActivity(pool, userId, action, module, entityType, entityId, description, ipAddress);
+  await logActivity(pool, userId, action, module, entityType, entityId, description, ipAddress, oldValue, newValue, deviceInfo);
 
   // 2. Dispatch Notifications
   try {
@@ -46,6 +46,7 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
       case 'RFQ_CREATED':
       case 'RFQ_PUBLISHED':
       case 'RFQ_ASSIGNED':
+      case 'RFQ_VENDOR_ASSIGNED':
         type = 'RFQ';
         title = `New RFQ Assigned`;
         message = `You have been assigned to RFQ #${entityId}: ${description || ''}`;
@@ -73,8 +74,16 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
         title = 'Quotation Selected';
         message = `Your quotation for RFQ #${entityId} has been selected. PO will be generated.`;
         
-        // Find vendor associated with this quotation
-        const [quoteRows] = await pool.execute('SELECT vendor_id FROM quotations WHERE id = ? LIMIT 1', [entityId]);
+        // Find vendor associated with this quotation or quotation selection.
+        const [quoteRows] = entityType === 'quotation_selection'
+          ? await pool.execute(
+              `SELECT q.vendor_id
+               FROM quotation_selections qs
+               JOIN quotations q ON q.id = qs.quotation_id
+               WHERE qs.id = ? LIMIT 1`,
+              [entityId]
+            )
+          : await pool.execute('SELECT vendor_id FROM quotations WHERE id = ? LIMIT 1', [entityId]);
         if (quoteRows.length > 0) {
           const vendorUserId = await getUserIdByVendorId(quoteRows[0].vendor_id);
           if (vendorUserId) recipientIds.push(vendorUserId);
@@ -100,9 +109,8 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
         
         // Notify RFQ Creator (Officer/Admin)
         const [apprRows] = await pool.execute(
-          `SELECT q.rfq_id, q.vendor_id FROM approvals a 
-           JOIN quotations q ON a.quotation_id = q.id 
-           WHERE a.id = ? LIMIT 1`,
+          `SELECT rfq_id, vendor_id FROM approval_requests 
+           WHERE id = ? LIMIT 1`,
           [entityId]
         );
         if (apprRows.length > 0) {
@@ -125,9 +133,8 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
         
         // Notify RFQ Creator and Vendor
         const [apprRejRows] = await pool.execute(
-          `SELECT q.rfq_id, q.vendor_id FROM approvals a 
-           JOIN quotations q ON a.quotation_id = q.id 
-           WHERE a.id = ? LIMIT 1`,
+          `SELECT rfq_id, vendor_id FROM approval_requests 
+           WHERE id = ? LIMIT 1`,
           [entityId]
         );
         if (apprRejRows.length > 0) {
@@ -149,9 +156,7 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
         
         // Notify Vendor and Officer
         const [poRows] = await pool.execute(
-          `SELECT q.vendor_id, q.rfq_id FROM purchase_orders po
-           JOIN approvals a ON po.approval_id = a.id
-           JOIN quotations q ON a.quotation_id = q.id
+          `SELECT po.vendor_id, po.rfq_id FROM purchase_orders po
            WHERE po.id = ? LIMIT 1`,
           [entityId]
         );
@@ -160,6 +165,27 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
           if (vendorUserId) recipientIds.push(vendorUserId);
 
           const creatorId = await getRfqCreatorUserId(poRows[0].rfq_id);
+          if (creatorId) recipientIds.push(creatorId);
+        }
+        recipientIds.push(...(await getUserIdsByRoles(['admin', 'manager'])));
+        break;
+
+      case 'PO_SENT':
+      case 'PO_ISSUED':
+        type = 'Purchase Order';
+        title = 'Purchase Order Issued';
+        message = `Purchase Order #${entityId} has been issued. ${description || ''}`;
+
+        const [issuedPoRows] = await pool.execute(
+          `SELECT po.vendor_id, po.rfq_id FROM purchase_orders po
+           WHERE po.id = ? LIMIT 1`,
+          [entityId]
+        );
+        if (issuedPoRows.length > 0) {
+          const vendorUserId = await getUserIdByVendorId(issuedPoRows[0].vendor_id);
+          if (vendorUserId) recipientIds.push(vendorUserId);
+
+          const creatorId = await getRfqCreatorUserId(issuedPoRows[0].rfq_id);
           if (creatorId) recipientIds.push(creatorId);
         }
         recipientIds.push(...(await getUserIdsByRoles(['admin', 'manager'])));
@@ -182,10 +208,8 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
         
         // Notify Vendor
         const [invRows] = await pool.execute(
-          `SELECT q.vendor_id FROM invoices i 
+          `SELECT po.vendor_id FROM invoices i 
            JOIN purchase_orders po ON i.po_id = po.id
-           JOIN approvals a ON po.approval_id = a.id
-           JOIN quotations q ON a.quotation_id = q.id
            WHERE i.id = ? LIMIT 1`,
           [entityId]
         );
@@ -195,12 +219,49 @@ export async function logAndNotify(userId, { action, module, entityType, entityI
         }
         break;
 
+      case 'INVOICE_PAID':
+        type = 'Invoice';
+        title = 'Invoice Paid';
+        message = `Invoice #${entityId} has been marked as paid. ${description || ''}`;
+
+        const [paidInvRows] = await pool.execute(
+          `SELECT po.vendor_id FROM invoices i
+           JOIN purchase_orders po ON i.po_id = po.id
+           WHERE i.id = ? LIMIT 1`,
+          [entityId]
+        );
+        if (paidInvRows.length > 0) {
+          const vendorUserId = await getUserIdByVendorId(paidInvRows[0].vendor_id);
+          if (vendorUserId) recipientIds.push(vendorUserId);
+        }
+        recipientIds.push(...(await getUserIdsByRoles(['admin', 'officer'])));
+        break;
+
       case 'VENDOR_CREATED':
         type = 'System';
         title = 'New Vendor Registered';
         message = `Vendor company ${description || ''} has registered.`;
-        
-        // Notify Admin and Officer
+        recipientIds = await getUserIdsByRoles(['admin', 'officer']);
+        break;
+
+      case 'VENDOR_UPDATED':
+        type = 'System';
+        title = 'Vendor Profile Updated';
+        message = `Vendor profile for ${description || ''} has been updated.`;
+        recipientIds = await getUserIdsByRoles(['admin', 'officer']);
+        break;
+
+      case 'VENDOR_DELETED':
+        type = 'System';
+        title = 'Vendor Profile Deleted/Archived';
+        message = `Vendor profile for ${description || ''} has been set to inactive.`;
+        recipientIds = await getUserIdsByRoles(['admin', 'officer']);
+        break;
+
+      case 'VENDOR_STATUS_CHANGED':
+        type = 'System';
+        title = 'Vendor Status Changed';
+        message = `Vendor status updated: ${description || ''}`;
         recipientIds = await getUserIdsByRoles(['admin', 'officer']);
         break;
 

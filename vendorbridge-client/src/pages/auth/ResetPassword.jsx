@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Lock, Eye, EyeOff, KeyRound, CheckCircle, AlertCircle, ArrowLeft, XCircle } from 'lucide-react';
 import AuthLayout from '../../components/auth/AuthLayout';
@@ -11,7 +11,6 @@ import { resetPassword } from '../../api/userApi';
  */
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const token = searchParams.get('token');
 
   const [loading, setLoading] = useState(false);
@@ -39,16 +38,16 @@ const ResetPassword = () => {
     return (
       <AuthLayout title="Invalid Link">
         <div className="text-center py-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 mb-6">
-            <XCircle className="h-8 w-8 text-red-400" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 border border-red-100 mb-6">
+            <XCircle className="h-8 w-8 text-red-500" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">Invalid Reset Link</h3>
-          <p className="text-sm text-slate-400 mb-6">
+          <h3 className="text-lg font-black text-slate-900 mb-2">Invalid Reset Link</h3>
+          <p className="text-sm font-semibold text-slate-500 mb-6">
             This password reset link is invalid or has been tampered with. Please request a new one.
           </p>
           <Link
             to="/forgot-password"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-cyan-400 hover:to-indigo-500"
+            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-green-500/10 transition hover:opacity-95"
           >
             Request New Link
           </Link>
@@ -84,16 +83,16 @@ const ResetPassword = () => {
       {success ? (
         /* ── Success State ── */
         <div className="text-center py-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
-            <CheckCircle className="h-8 w-8 text-emerald-400" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 border border-emerald-100 mb-6">
+            <CheckCircle className="h-8 w-8 text-emerald-500" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">Password Reset Successfully</h3>
-          <p className="text-sm text-slate-400 mb-8 leading-relaxed">
+          <h3 className="text-lg font-black text-slate-900 mb-2">Password Reset Successfully</h3>
+          <p className="text-sm font-semibold text-slate-500 mb-8 leading-relaxed">
             Your password has been updated. You can now sign in with your new password.
           </p>
           <Link
             to="/login"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:from-cyan-400 hover:to-indigo-500"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-green-500/10 transition hover:opacity-95"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Login
@@ -104,30 +103,30 @@ const ResetPassword = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
           {/* Error Alert */}
           {error && (
-            <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
+            <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-              <span>{error}</span>
+              <span className="font-semibold">{error}</span>
             </div>
           )}
 
           {/* New Password */}
           <div>
-            <label htmlFor="reset-password" className="block text-xs font-medium uppercase tracking-wider text-slate-400">
+            <label htmlFor="reset-password" className="block text-xs font-black uppercase tracking-wider text-slate-400">
               New Password
             </label>
             <div className="relative mt-2">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                <Lock className="h-4 w-4 text-slate-500" />
+                <Lock className="h-4 w-4 text-slate-400" />
               </div>
               <input
                 id="reset-password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder="••••••••"
-                className={`block w-full rounded-xl border bg-slate-950/70 py-3 pl-10 pr-11 text-sm text-white placeholder-slate-500 shadow-inner outline-none transition duration-200 ${
+                className={`premium-input pl-10 pr-11 ${
                   errors.password
-                    ? 'border-red-500/50 focus:border-red-400 focus:ring-1 focus:ring-red-400'
-                    : 'border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                    ? 'border-red-300 focus:border-red-400 focus:ring-red-400'
+                    : 'focus:border-primary'
                 }`}
                 {...register('password', {
                   required: 'Password is required',
@@ -137,37 +136,37 @@ const ResetPassword = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-500 hover:text-slate-300 transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {errors.password ? (
-              <p className="mt-1.5 text-xs text-red-400">{errors.password.message}</p>
+              <p className="mt-1.5 text-xs font-semibold text-red-500">{errors.password.message}</p>
             ) : (
-              <p className="mt-1.5 text-xs text-slate-500">Minimum 8 characters</p>
+              <p className="mt-1.5 text-xs font-bold text-slate-400">Minimum 8 characters</p>
             )}
           </div>
 
           {/* Confirm Password */}
           <div>
-            <label htmlFor="reset-confirm-password" className="block text-xs font-medium uppercase tracking-wider text-slate-400">
+            <label htmlFor="reset-confirm-password" className="block text-xs font-black uppercase tracking-wider text-slate-400">
               Confirm New Password
             </label>
             <div className="relative mt-2">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-                <Lock className="h-4 w-4 text-slate-500" />
+                <Lock className="h-4 w-4 text-slate-400" />
               </div>
               <input
                 id="reset-confirm-password"
                 type={showConfirmPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder="••••••••"
-                className={`block w-full rounded-xl border bg-slate-950/70 py-3 pl-10 pr-11 text-sm text-white placeholder-slate-500 shadow-inner outline-none transition duration-200 ${
+                className={`premium-input pl-10 pr-11 ${
                   errors.confirmPassword
-                    ? 'border-red-500/50 focus:border-red-400 focus:ring-1 focus:ring-red-400'
-                    : 'border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                    ? 'border-red-300 focus:border-red-400 focus:ring-red-400'
+                    : 'focus:border-primary'
                 }`}
                 {...register('confirmPassword', {
                   required: 'Please confirm your password',
@@ -177,14 +176,14 @@ const ResetPassword = () => {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-500 hover:text-slate-300 transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                 tabIndex={-1}
               >
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {errors.confirmPassword && (
-              <p className="mt-1.5 text-xs text-red-400">{errors.confirmPassword.message}</p>
+              <p className="mt-1.5 text-xs font-semibold text-red-500">{errors.confirmPassword.message}</p>
             )}
           </div>
 
@@ -192,7 +191,7 @@ const ResetPassword = () => {
           <button
             type="submit"
             disabled={loading}
-            className="group relative flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group relative flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-secondary px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-green-500/10 transition-all duration-200 hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? (
               <span className="flex items-center gap-2">
@@ -211,10 +210,10 @@ const ResetPassword = () => {
           </button>
 
           {/* Back to Login */}
-          <div className="pt-4 border-t border-slate-800/80 text-center">
+          <div className="pt-4 border-t border-slate-100 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-cyan-400 transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-400 hover:text-primary transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to Login

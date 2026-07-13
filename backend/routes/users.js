@@ -43,9 +43,10 @@ router.post('/users',
     rules.required('email'),
     rules.email('email'),
     rules.required('password'),
-    rules.minLength('password', 8),
+    rules.strongPassword('password'),
     rules.required('role'),
-    rules.oneOf('role', ['admin', 'officer', 'manager', 'vendor'])
+    rules.oneOf('role', ['admin', 'officer', 'manager', 'vendor']),
+    rules.phone('phone')
   ]),
   createUser
 );
@@ -62,7 +63,8 @@ router.put('/users/:id',
     rules.required('email'),
     rules.email('email'),
     rules.required('role'),
-    rules.oneOf('role', ['admin', 'officer', 'manager', 'vendor'])
+    rules.oneOf('role', ['admin', 'officer', 'manager', 'vendor']),
+    rules.phone('phone')
   ]),
   updateUser
 );
@@ -85,15 +87,37 @@ router.delete('/users/:id', verifyToken, restrictTo('admin'), deleteUser);
 router.get('/profile', verifyToken, getProfile);
 
 /**
+ * GET /api/users/profile
+ * Authenticated — Alias for /api/profile (spec compliance).
+ */
+router.get('/users/profile', verifyToken, getProfile);
+
+/**
  * PUT /api/profile
- * Authenticated — Update own name and email.
+ * Authenticated — Update own name, email, and phone.
  */
 router.put('/profile',
   verifyToken,
   validate([
     rules.required('name'),
     rules.required('email'),
-    rules.email('email')
+    rules.email('email'),
+    rules.phone('phone')
+  ]),
+  updateProfile
+);
+
+/**
+ * PUT /api/users/profile
+ * Authenticated — Alias for /api/profile (spec compliance).
+ */
+router.put('/users/profile',
+  verifyToken,
+  validate([
+    rules.required('name'),
+    rules.required('email'),
+    rules.email('email'),
+    rules.phone('phone')
   ]),
   updateProfile
 );
@@ -107,7 +131,7 @@ router.put('/profile/change-password',
   validate([
     rules.required('currentPassword'),
     rules.required('newPassword'),
-    rules.minLength('newPassword', 8),
+    rules.strongPassword('newPassword'),
     rules.required('confirmPassword')
   ]),
   changePassword

@@ -64,8 +64,7 @@ const getVendorActivityOverview = async () => {
      FROM vendors v
      LEFT JOIN rfq_vendors rv ON rv.vendor_id = v.id
      LEFT JOIN quotations q ON q.vendor_id = v.id
-     LEFT JOIN approvals a ON a.quotation_id = q.id
-     LEFT JOIN purchase_orders po ON po.approval_id = a.id
+     LEFT JOIN purchase_orders po ON po.vendor_id = v.id
      GROUP BY v.id, v.name
      ORDER BY submitted_quotations DESC, assigned_rfqs DESC
      LIMIT 6`
@@ -75,8 +74,8 @@ const getVendorActivityOverview = async () => {
 };
 
 const getRecentActivity = async (limit = 6) => {
-  const [rows] = await pool.execute(
-    `SELECT al.id, al.entity_type, al.entity_id, al.action, al.created_at, u.name AS user_name
+  const [rows] = await pool.query(
+    `SELECT al.id, al.entity_type, al.entity_id, al.action_type AS action, al.created_at, COALESCE(al.user_name, u.full_name) AS user_name
      FROM activity_logs al
      LEFT JOIN users u ON u.id = al.user_id
      ORDER BY al.created_at DESC
@@ -99,9 +98,9 @@ const getRecentRFQs = async (limit = 5, vendorId = null) => {
   }
 
   params.push(limit);
-  const [rows] = await pool.execute(
-    `SELECT r.id, r.title, r.status, r.deadline, r.created_at,
-            u.name AS created_by_name,
+  const [rows] = await pool.query(
+    `SELECT r.id, r.title, r.status, r.submission_deadline AS deadline, r.created_at,
+            u.full_name AS created_by_name,
             COUNT(DISTINCT rv_count.vendor_id) AS invited_vendors,
             COUNT(DISTINCT q.id) AS quotations_received
      FROM rfqs r
@@ -110,7 +109,7 @@ const getRecentRFQs = async (limit = 5, vendorId = null) => {
      LEFT JOIN rfq_vendors rv_count ON rv_count.rfq_id = r.id
      LEFT JOIN quotations q ON q.rfq_id = r.id
      ${vendorWhere}
-     GROUP BY r.id, r.title, r.status, r.deadline, r.created_at, u.name
+     GROUP BY r.id, r.title, r.status, r.submission_deadline, r.created_at, u.full_name
      ORDER BY r.created_at DESC
      LIMIT ?`,
     params
@@ -124,19 +123,17 @@ const getRecentPOs = async (limit = 5, vendorId = null) => {
   let vendorWhere = '';
 
   if (vendorId) {
-    vendorWhere = 'WHERE q.vendor_id = ?';
+    vendorWhere = 'WHERE po.vendor_id = ?';
     params.push(vendorId);
   }
 
   params.push(limit);
-  const [rows] = await pool.execute(
+  const [rows] = await pool.query(
     `SELECT po.id, po.po_number, po.status, po.grand_total, po.created_at,
             v.name AS vendor_name, r.title AS rfq_title
      FROM purchase_orders po
-     JOIN approvals a ON a.id = po.approval_id
-     JOIN quotations q ON q.id = a.quotation_id
-     JOIN vendors v ON v.id = q.vendor_id
-     JOIN rfqs r ON r.id = q.rfq_id
+     JOIN vendors v ON v.id = po.vendor_id
+     JOIN rfqs r ON r.id = po.rfq_id
      ${vendorWhere}
      ORDER BY po.created_at DESC
      LIMIT ?`,
@@ -151,21 +148,19 @@ const getRecentInvoices = async (limit = 5, vendorId = null) => {
   let vendorWhere = '';
 
   if (vendorId) {
-    vendorWhere = 'WHERE q.vendor_id = ?';
+    vendorWhere = 'WHERE po.vendor_id = ?';
     params.push(vendorId);
   }
 
   params.push(limit);
-  const [rows] = await pool.execute(
-    `SELECT i.id, i.invoice_number, i.status, i.grand_total, i.issued_at,
+  const [rows] = await pool.query(
+    `SELECT i.id, i.invoice_number, i.status, i.grand_total, i.issue_date AS issued_at,
             po.po_number, v.name AS vendor_name
      FROM invoices i
      JOIN purchase_orders po ON po.id = i.po_id
-     JOIN approvals a ON a.id = po.approval_id
-     JOIN quotations q ON q.id = a.quotation_id
-     JOIN vendors v ON v.id = q.vendor_id
+     JOIN vendors v ON v.id = po.vendor_id
      ${vendorWhere}
-     ORDER BY i.issued_at DESC
+     ORDER BY i.issue_date DESC
      LIMIT ?`,
     params
   );
@@ -229,7 +224,7 @@ export const getAdminDashboardData = async () => {
     pool.execute(
       `SELECT
         (SELECT COUNT(*) FROM quotations WHERE status = 'submitted') AS submitted_quotations,
-        (SELECT COUNT(*) FROM approvals WHERE decision = 'pending') AS pending_approvals,
+        (SELECT COUNT(*) FROM approval_requests WHERE status = 'Pending Approval') AS pending_approvals,
         (SELECT COUNT(*) FROM invoices WHERE status = 'paid') AS paid_invoices,
         (SELECT COUNT(*) FROM vendors WHERE status = 'active') AS active_vendors`
     )
@@ -276,7 +271,7 @@ export const getOfficerDashboardData = async () => {
     pool.execute("SELECT COUNT(*) AS count FROM rfqs WHERE status = 'open'"),
     pool.execute("SELECT COUNT(*) AS count FROM rfqs WHERE status = 'closed'"),
     pool.execute("SELECT COUNT(*) AS count FROM quotations WHERE status = 'submitted'"),
-    pool.execute("SELECT COUNT(*) AS count FROM approvals WHERE decision = 'pending'"),
+    pool.execute("SELECT COUNT(*) AS count FROM approval_requests WHERE status = 'Pending Approval'"),
     pool.execute('SELECT COUNT(*) AS count FROM purchase_orders'),
     getRecentRFQs(),
     getRecentPOs(),
@@ -319,35 +314,45 @@ export const getManagerDashboardData = async () => {
     [recentDecisions],
     charts
   ] = await Promise.all([
-    pool.execute("SELECT COUNT(*) AS count FROM approvals WHERE decision = 'pending'"),
-    pool.execute("SELECT COUNT(*) AS count FROM approvals WHERE decision = 'approved'"),
-    pool.execute("SELECT COUNT(*) AS count FROM approvals WHERE decision = 'rejected'"),
+    pool.execute("SELECT COUNT(*) AS count FROM approval_requests WHERE status = 'Pending Approval'"),
+    pool.execute("SELECT COUNT(*) AS count FROM approval_requests WHERE status = 'Approved'"),
+    pool.execute("SELECT COUNT(*) AS count FROM approval_requests WHERE status = 'Rejected'"),
     pool.execute(
       `SELECT
-        COALESCE(SUM(CASE WHEN decision = 'approved' THEN 1 ELSE 0 END), 0) AS approved,
-        COALESCE(SUM(CASE WHEN decision IN ('approved', 'rejected') THEN 1 ELSE 0 END), 0) AS decided
-       FROM approvals`
+        COALESCE(SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END), 0) AS approved,
+        COALESCE(SUM(CASE WHEN status IN ('Approved', 'Rejected') THEN 1 ELSE 0 END), 0) AS decided
+       FROM approval_requests`
     ),
     pool.execute(
-      `SELECT a.id, a.decision, q.total_price, q.delivery_days, r.title AS rfq_title,
-              v.name AS vendor_name, r.deadline AS rfq_deadline
-       FROM approvals a
+      `SELECT a.id, 
+              'pending' AS decision, 
+              q.grand_total AS total_price, 
+              q.delivery_days, 
+              r.title AS rfq_title,
+              v.name AS vendor_name, 
+              r.submission_deadline AS rfq_deadline
+       FROM approval_requests a
        JOIN quotations q ON q.id = a.quotation_id
        JOIN vendors v ON v.id = q.vendor_id
        JOIN rfqs r ON r.id = q.rfq_id
-       WHERE a.decision = 'pending'
+       WHERE a.status = 'Pending Approval'
        ORDER BY a.id DESC
        LIMIT 5`
     ),
     pool.execute(
-      `SELECT a.id, a.decision, a.remarks, a.decided_at, q.total_price,
-              r.title AS rfq_title, v.name AS vendor_name
-       FROM approvals a
+      `SELECT a.id, 
+              CASE WHEN a.status = 'Approved' THEN 'approved' ELSE 'rejected' END AS decision, 
+              a.remarks, 
+              COALESCE(a.approved_at, a.rejected_at) AS decided_at, 
+              q.grand_total AS total_price,
+              r.title AS rfq_title, 
+              v.name AS vendor_name
+       FROM approval_requests a
        JOIN quotations q ON q.id = a.quotation_id
        JOIN vendors v ON v.id = q.vendor_id
        JOIN rfqs r ON r.id = q.rfq_id
-       WHERE a.decision IN ('approved', 'rejected')
-       ORDER BY a.decided_at DESC
+       WHERE a.status IN ('Approved', 'Rejected')
+       ORDER BY COALESCE(a.approved_at, a.rejected_at) DESC
        LIMIT 5`
     ),
     getBaseCharts()
@@ -406,18 +411,14 @@ export const getVendorDashboardData = async (user) => {
     pool.execute(
       `SELECT COUNT(*) AS count
        FROM purchase_orders po
-       JOIN approvals a ON a.id = po.approval_id
-       JOIN quotations q ON q.id = a.quotation_id
-       WHERE q.vendor_id = ?`,
+       WHERE po.vendor_id = ?`,
       [vendorId]
     ),
     pool.execute(
       `SELECT COUNT(*) AS count
        FROM invoices i
        JOIN purchase_orders po ON po.id = i.po_id
-       JOIN approvals a ON a.id = po.approval_id
-       JOIN quotations q ON q.id = a.quotation_id
-       WHERE q.vendor_id = ? AND i.status IN ('generated', 'sent')`,
+       WHERE po.vendor_id = ? AND i.status IN ('generated', 'sent')`,
       [vendorId]
     ),
     getRecentRFQs(5, vendorId),
@@ -446,6 +447,47 @@ export const getVendorDashboardData = async (user) => {
     quotationTimeline,
     recentPOs,
     recentInvoices,
+    charts
+  };
+};
+
+export const getFinanceDashboardData = async () => {
+  const [
+    [[totalInvoicesRow]],
+    [[paidInvoicesRow]],
+    [[unpaidInvoicesRow]],
+    [[totalPaidAmountRow]],
+    [[totalPendingAmountRow]],
+    recentInvoices,
+    recentPOs,
+    charts
+  ] = await Promise.all([
+    pool.execute('SELECT COUNT(*) AS count FROM invoices'),
+    pool.execute("SELECT COUNT(*) AS count FROM invoices WHERE status = 'Paid'"),
+    pool.execute("SELECT COUNT(*) AS count FROM invoices WHERE status != 'Paid' AND status != 'Cancelled'"),
+    pool.execute("SELECT COALESCE(SUM(grand_total), 0) AS total FROM invoices WHERE status = 'Paid'"),
+    pool.execute("SELECT COALESCE(SUM(grand_total), 0) AS total FROM invoices WHERE status != 'Paid' AND status != 'Cancelled'"),
+    getRecentInvoices(6),
+    getRecentPOs(6),
+    getBaseCharts()
+  ]);
+
+  return {
+    role: 'finance',
+    kpis: [
+      { key: 'totalInvoices', label: 'Total Invoices', value: totalInvoicesRow.count },
+      { key: 'paidInvoices', label: 'Paid Invoices', value: paidInvoicesRow.count },
+      { key: 'unpaidInvoices', label: 'Unpaid Invoices', value: unpaidInvoicesRow.count },
+      { key: 'totalPaidAmount', label: 'Total Paid Amount', value: toNumber(totalPaidAmountRow.total), format: 'currency' },
+      { key: 'totalPendingAmount', label: 'Total Pending Amount', value: toNumber(totalPendingAmountRow.total), format: 'currency' }
+    ],
+    quickActions: [
+      { label: 'View Invoices', path: '/invoices' },
+      { label: 'View Purchase Orders', path: '/purchase-orders' },
+      { label: 'Financial Reports', path: '/reports' }
+    ],
+    recentInvoices,
+    recentPOs,
     charts
   };
 };

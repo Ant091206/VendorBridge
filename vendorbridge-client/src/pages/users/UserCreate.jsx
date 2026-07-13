@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, UserPlus, User, Mail, Lock, Eye, EyeOff, Shield, ChevronDown, AlertCircle } from 'lucide-react';
+import { ArrowLeft, UserPlus, User, Mail, Phone, Lock, Eye, EyeOff, Shield, AlertCircle } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import Toast from '../../components/Toast';
 import { createUser } from '../../api/userApi';
@@ -32,6 +32,7 @@ const UserCreate = () => {
     defaultValues: {
       name: '',
       email: '',
+      phone: '',
       password: '',
       role: 'officer',
       status: 'active'
@@ -128,6 +129,33 @@ const UserCreate = () => {
               {errors.email && <p className="mt-1.5 text-xs text-red-400">{errors.email.message}</p>}
             </div>
 
+            {/* Phone (Optional) */}
+            <div>
+              <label htmlFor="create-phone" className="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">
+                Phone Number <span className="font-normal normal-case text-slate-500">(Optional)</span>
+              </label>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                  <Phone className="h-4 w-4 text-slate-500" />
+                </div>
+                <input
+                  id="create-phone"
+                  type="tel"
+                  placeholder="+91 9876543210"
+                  className={`block w-full rounded-xl border bg-slate-950/70 py-3 pl-10 pr-4 text-sm text-white placeholder-slate-500 shadow-inner outline-none transition duration-200 ${
+                    errors.phone ? 'border-red-500/50' : 'border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                  }`}
+                  {...register('phone', {
+                    validate: (val) => {
+                      if (!val || val.trim() === '') return true;
+                      return /^\+?[\d\s\-().]{7,20}$/.test(val.trim()) || 'Please enter a valid phone number';
+                    }
+                  })}
+                />
+              </div>
+              {errors.phone && <p className="mt-1.5 text-xs text-red-400">{errors.phone.message}</p>}
+            </div>
+
             {/* Password */}
             <div>
               <label htmlFor="create-password" className="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">
@@ -140,13 +168,19 @@ const UserCreate = () => {
                 <input
                   id="create-password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Minimum 8 characters"
+                  placeholder="Min 8 chars, uppercase, lowercase, number"
                   className={`block w-full rounded-xl border bg-slate-950/70 py-3 pl-10 pr-11 text-sm text-white placeholder-slate-500 shadow-inner outline-none transition duration-200 ${
                     errors.password ? 'border-red-500/50' : 'border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
                   }`}
                   {...register('password', {
                     required: 'Password is required',
-                    minLength: { value: 8, message: 'Minimum 8 characters' }
+                    validate: (val) => {
+                      if (val.length < 8) return 'Minimum 8 characters';
+                      if (!/[A-Z]/.test(val)) return 'Must contain an uppercase letter';
+                      if (!/[a-z]/.test(val)) return 'Must contain a lowercase letter';
+                      if (!/[0-9]/.test(val)) return 'Must contain a number';
+                      return true;
+                    }
                   })}
                 />
                 <button
@@ -196,6 +230,7 @@ const UserCreate = () => {
                 >
                   <option value="active" className="bg-slate-900">Active</option>
                   <option value="inactive" className="bg-slate-900">Inactive</option>
+                  <option value="suspended" className="bg-slate-900">Suspended</option>
                 </select>
               </div>
             </div>
@@ -212,7 +247,7 @@ const UserCreate = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-green-500/20 transition-all hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="flex items-center gap-2">

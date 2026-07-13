@@ -8,7 +8,19 @@ import pool from '../config/db.js';
  * Create an activity log record.
  * Runs asynchronously and catches errors to prevent blocking the primary request flow.
  */
-export async function logActivity(dbOrPool, userId, action, module, entityType, entityId, description, ipAddress) {
+export async function logActivity(
+  dbOrPool, 
+  userId, 
+  actionType, 
+  moduleName, 
+  entityType, 
+  entityId, 
+  description, 
+  ipAddress, 
+  oldValue = null, 
+  newValue = null, 
+  deviceInfo = null
+) {
   const db = dbOrPool || pool;
   try {
     let userName = null;
@@ -23,19 +35,31 @@ export async function logActivity(dbOrPool, userId, action, module, entityType, 
     }
 
     const sql = `
-      INSERT INTO activity_logs (user_id, user_name, role, action, module, entity_type, entity_id, description, ip_address, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      INSERT INTO activity_logs (
+        user_id, user_name, role, action_type, module_name, 
+        entity_type, entity_id, old_value, new_value, 
+        description, ip_address, device_info, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
+    
+    // Ensure JSON values are stringified
+    const oldValJson = oldValue ? JSON.stringify(oldValue) : null;
+    const newValJson = newValue ? JSON.stringify(newValue) : null;
+
     await db.execute(sql, [
       userId || null,
       userName,
       role,
-      action,
-      module,
-      entityType || null,
-      entityId || null,
+      actionType,
+      moduleName,
+      entityType || 'system',
+      (entityId !== undefined && entityId !== null) ? entityId : 0,
+      oldValJson,
+      newValJson,
       description || null,
-      ipAddress || null
+      ipAddress || null,
+      deviceInfo || null
     ]);
   } catch (error) {
     console.error('[ActivityLogger Error] Failed to write log:', error.message);
@@ -46,7 +70,20 @@ export async function logActivity(dbOrPool, userId, action, module, entityType, 
  * List activity logs with query options.
  */
 export async function listLogs(filters = {}) {
-  const { user_id, module, action, from, to, search, page = 1, limit = 50 } = filters;
+  const {
+    user_id,
+    role,
+    entity_type,
+    module,
+    action,
+    from,
+    to,
+    search,
+    page = 1,
+    limit = 50,
+    allowed_modules,
+    sort = 'created_desc'
+  } = filters;
   const parsedLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
   const parsedPage = Math.max(parseInt(page) || 1, 1);
   const offset = (parsedPage - 1) * parsedLimit;
@@ -59,14 +96,35 @@ export async function listLogs(filters = {}) {
     params.push(user_id);
   }
 
-  if (module) {
-    conditions.push('module = ?');
-    params.push(module);
+  if (role) {
+    conditions.push('role = ?');
+    params.push(role);
   }
 
-  if (action) {
-    conditions.push('action = ?');
-    params.push(action);
+  if (entity_type) {
+    conditions.push('entity_type = ?');
+    params.push(entity_type);
+  }
+
+  // Handle both filter names
+  const moduleName = module || filters.module_name;
+  if (moduleName) {
+    conditions.push('module_name = ?');
+    params.push(moduleName);
+  }
+
+  // Handle allowed modules constraint
+  if (allowed_modules && allowed_modules.length > 0) {
+    const placeholders = allowed_modules.map(() => '?').join(',');
+    conditions.push(`module_name IN (${placeholders})`);
+    params.push(...allowed_modules);
+  }
+
+  // Handle both action/action_type
+  const actType = action || filters.action_type;
+  if (actType) {
+    conditions.push('action_type = ?');
+    params.push(actType);
   }
 
   if (from) {
@@ -80,12 +138,23 @@ export async function listLogs(filters = {}) {
   }
 
   if (search) {
-    conditions.push('(user_name LIKE ? OR action LIKE ? OR description LIKE ? OR module LIKE ?)');
+    conditions.push('(user_name LIKE ? OR role LIKE ? OR action_type LIKE ? OR description LIKE ? OR module_name LIKE ? OR entity_type LIKE ? OR ip_address LIKE ?)');
     const term = `%${search}%`;
-    params.push(term, term, term, term);
+    params.push(term, term, term, term, term, term, term);
   }
 
   const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+  const sortMap = {
+    created_desc: 'created_at DESC',
+    created_asc: 'created_at ASC',
+    action_asc: 'action_type ASC, created_at DESC',
+    action_desc: 'action_type DESC, created_at DESC',
+    module_asc: 'module_name ASC, created_at DESC',
+    module_desc: 'module_name DESC, created_at DESC',
+    user_asc: 'user_name ASC, created_at DESC',
+    user_desc: 'user_name DESC, created_at DESC'
+  };
+  const orderBy = sortMap[sort] || sortMap.created_desc;
 
   // Get total count
   const countSql = `SELECT COUNT(*) AS total FROM activity_logs ${whereClause}`;
@@ -94,14 +163,15 @@ export async function listLogs(filters = {}) {
 
   // Get paginated results
   const dataSql = `
-    SELECT id, user_id, user_name, role, action, module, entity_type, entity_id, description, ip_address, created_at
+    SELECT id, user_id, user_name, role, action_type, module_name, 
+           entity_type, entity_id, old_value, new_value, description, 
+           ip_address, device_info, created_at
     FROM activity_logs
     ${whereClause}
-    ORDER BY created_at DESC
+    ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `;
   
-  // pool.execute limit/offset parameters must be numbers in mysql2 when prepared statements are used.
   const [rows] = await pool.execute(dataSql, [...params, parsedLimit.toString(), offset.toString()]);
 
   return {
@@ -118,7 +188,9 @@ export async function listLogs(filters = {}) {
  */
 export async function getLogById(id) {
   const sql = `
-    SELECT id, user_id, user_name, role, action, module, entity_type, entity_id, description, ip_address, created_at
+    SELECT id, user_id, user_name, role, action_type, module_name, 
+           entity_type, entity_id, old_value, new_value, description, 
+           ip_address, device_info, created_at
     FROM activity_logs
     WHERE id = ? LIMIT 1
   `;

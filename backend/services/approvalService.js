@@ -1,450 +1,669 @@
 import pool from '../config/db.js';
-import { logActivity } from '../utils/activityLogger.js';
-import { generatePONumber } from '../utils/poNumberGenerator.js';
-import { sendEmail } from './emailService.js';
+import { logAndNotify } from '../utils/activityAndNotificationHelper.js';
 
 /**
- * Returns all approvals with quotation, vendor, and RFQ details.
- * @param {string} decision - Filter by decision ('pending' | 'approved' | 'rejected')
+ * Helper: Generate unique Approval Number in format APR-YYYY-XXXX
  */
-export const getAllApprovals = async (decision) => {
-  let sql = `
-    SELECT 
-      a.id,
-      a.decision,
-      a.status,
-      a.remarks,
-      a.decided_at,
-      a.created_at,
-      a.rfq_id,
-      a.quotation_id,
-      a.requested_by,
-      a.approver_id,
-      u.name AS approver_name,
-      req.name AS requester_name,
-      q.unit_price,
-      q.total_price,
-      q.delivery_days,
-      v.name AS vendor_name,
-      v.email AS vendor_email,
-      vc.name AS vendor_category,
-      r.title AS rfq_title,
-      r.quantity AS rfq_quantity,
-      r.deadline AS rfq_deadline
-    FROM approvals a
-    JOIN quotations q ON a.quotation_id = q.id
-    JOIN vendors v ON q.vendor_id = v.id
-    LEFT JOIN vendor_categories vc ON v.category_id = vc.id
-    JOIN rfqs r ON q.rfq_id = r.id
-    LEFT JOIN users u ON a.approver_id = u.id
-    LEFT JOIN users req ON a.requested_by = req.id
-  `;
-  
-  const params = [];
-  if (decision) {
-    sql += ` WHERE a.decision = ?`;
-    params.push(decision);
-  }
-  
-  sql += ` ORDER BY a.id DESC`;
-  const [rows] = await pool.execute(sql, params);
-  return rows;
-};
-
-/**
- * Returns only pending approvals.
- */
-export const getPendingApprovals = async () => {
-  const sql = `
-    SELECT 
-      a.id,
-      a.decision,
-      a.status,
-      a.remarks,
-      a.decided_at,
-      a.created_at,
-      a.rfq_id,
-      a.quotation_id,
-      a.requested_by,
-      a.approver_id,
-      u.name AS approver_name,
-      req.name AS requester_name,
-      q.unit_price,
-      q.total_price,
-      q.delivery_days,
-      v.name AS vendor_name,
-      v.email AS vendor_email,
-      vc.name AS vendor_category,
-      r.title AS rfq_title,
-      r.quantity AS rfq_quantity,
-      r.deadline AS rfq_deadline
-    FROM approvals a
-    JOIN quotations q ON a.quotation_id = q.id
-    JOIN vendors v ON q.vendor_id = v.id
-    LEFT JOIN vendor_categories vc ON v.category_id = vc.id
-    JOIN rfqs r ON q.rfq_id = r.id
-    LEFT JOIN users u ON a.approver_id = u.id
-    LEFT JOIN users req ON a.requested_by = req.id
-    WHERE a.decision = 'pending'
-    ORDER BY a.id DESC
-  `;
-  const [rows] = await pool.execute(sql);
-  return rows;
-};
-
-/**
- * Returns single approval full details including price comparisons.
- * @param {number|string} id - Approval ID
- */
-export const getApprovalById = async (id) => {
-  const sql = `
-    SELECT 
-      a.id,
-      a.decision,
-      a.status,
-      a.remarks,
-      a.decided_at,
-      a.created_at,
-      a.rfq_id,
-      a.quotation_id,
-      a.requested_by,
-      a.approver_id,
-      u.name AS approver_name,
-      req.name AS requester_name,
-      q.id AS quotation_id,
-      q.unit_price,
-      q.total_price,
-      q.delivery_days,
-      q.notes AS vendor_notes,
-      v.name AS vendor_name,
-      v.email AS vendor_email,
-      v.gst_number AS vendor_gst,
-      v.address AS vendor_address,
-      v.phone AS vendor_phone,
-      vc.name AS vendor_category,
-      r.id AS rfq_id,
-      r.title AS rfq_title,
-      r.description AS rfq_description,
-      r.quantity AS rfq_quantity,
-      r.deadline AS rfq_deadline,
-      po.id AS po_id
-    FROM approvals a
-    JOIN quotations q ON a.quotation_id = q.id
-    JOIN vendors v ON q.vendor_id = v.id
-    LEFT JOIN vendor_categories vc ON v.category_id = vc.id
-    JOIN rfqs r ON q.rfq_id = r.id
-    LEFT JOIN users u ON a.approver_id = u.id
-    LEFT JOIN users req ON a.requested_by = req.id
-    LEFT JOIN purchase_orders po ON po.approval_id = a.id
-    WHERE a.id = ?
-  `;
-  
-  const [rows] = await pool.execute(sql, [id]);
-  if (rows.length === 0) {
-    return null;
-  }
-  
-  const approval = rows[0];
-  const rfqId = approval.rfq_id;
-  
-  // Fetch quotes to calculate comparison metrics
-  const [quotes] = await pool.execute(
-    `SELECT total_price FROM quotations WHERE rfq_id = ? AND status IN ('submitted', 'selected', 'rejected')`,
-    [rfqId]
+const generateApprovalNumber = async (conn) => {
+  const year = new Date().getFullYear();
+  const [rows] = await conn.execute(
+    `SELECT approval_number 
+     FROM approval_requests 
+     WHERE approval_number LIKE ? 
+     ORDER BY id DESC 
+     LIMIT 1`,
+    [`APR-${year}-%`]
   );
-  
-  const totalVendors = quotes.length;
-  let lowestPrice = 0;
-  
-  if (totalVendors > 0) {
-    const prices = quotes.map(q => parseFloat(q.total_price));
-    lowestPrice = Math.min(...prices);
+
+  let next = 1;
+  if (rows.length > 0 && rows[0].approval_number) {
+    const last = rows[0].approval_number.split('-').pop();
+    next = (parseInt(last, 10) || 0) + 1;
   }
-  
-  const selectedPrice = parseFloat(approval.total_price);
-  const priceDifference = selectedPrice - lowestPrice;
-  const percentageDifference = lowestPrice > 0 
-    ? parseFloat(((priceDifference / lowestPrice) * 100).toFixed(1)) 
-    : 0;
-    
-  approval.comparison_summary = {
-    total_vendors: totalVendors,
-    lowest_price: lowestPrice,
-    difference: priceDifference,
-    percentage_difference: percentageDifference
+  return `APR-${year}-${String(next).padStart(4, '0')}`;
+};
+
+/**
+ * Helper: Write history record to approval_history
+ */
+const logHistory = async (conn, requestId, actionType, userId, remarks = null) => {
+  await conn.execute(
+    `INSERT INTO approval_history (approval_request_id, action_type, action_by, remarks)
+     VALUES (?, ?, ?, ?)`,
+    [requestId, actionType, userId, remarks]
+  );
+};
+
+/**
+ * Create a new Approval Request (initial state: Draft)
+ */
+export const createApprovalRequest = async (payload, requestedBy) => {
+  const { rfq_id, quotation_id, vendor_id, assigned_to, selection_reason, remarks } = payload;
+
+  // 1. Verify Quotation is 'selected'
+  const [quoteRows] = await pool.execute(
+    `SELECT id, status, rfq_id, vendor_id FROM quotations WHERE id = ?`,
+    [quotation_id]
+  );
+  if (quoteRows.length === 0) {
+    const error = new Error('Selected quotation not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const quote = quoteRows[0];
+  if (quote.status !== 'selected') {
+    const error = new Error(`Approval workflow can only start for quotations with status 'selected'. Current status: ${quote.status}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  if (quote.rfq_id !== parseInt(rfq_id) || quote.vendor_id !== parseInt(vendor_id)) {
+    const error = new Error('Quotation mismatch with RFQ or Vendor.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 2. Verify assigned approver is Manager or Admin
+  const [userRows] = await pool.execute(
+    `SELECT id, role FROM users WHERE id = ? AND role IN ('manager', 'admin')`,
+    [assigned_to]
+  );
+  if (userRows.length === 0) {
+    const error = new Error('Assigned approver must exist and have Manager/Admin role.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 3. Verify no active approval request exists for this quotation
+  const [existingRows] = await pool.execute(
+    `SELECT id FROM approval_requests WHERE quotation_id = ? AND status NOT IN ('Cancelled', 'Rejected')`,
+    [quotation_id]
+  );
+  if (existingRows.length > 0) {
+    const error = new Error('An active approval request already exists for this quotation.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const approvalNumber = await generateApprovalNumber(conn);
+
+    const [result] = await conn.execute(
+      `INSERT INTO approval_requests (
+         approval_number, rfq_id, quotation_id, vendor_id, requested_by, assigned_to, selection_reason, remarks, status
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Draft')`,
+      [approvalNumber, rfq_id, quotation_id, vendor_id, requestedBy, assigned_to, selection_reason.trim(), remarks ? remarks.trim() : null]
+    );
+
+    const requestId = result.insertId;
+
+    // Log history
+    await logHistory(conn, requestId, 'Created', requestedBy, 'Approval request initialized in Draft mode.');
+
+    await conn.commit();
+    conn.release();
+
+    // Log activity
+    await logAndNotify(requestedBy, {
+      action: 'APPROVAL_CREATED',
+      module: 'Approval Workflow',
+      entityType: 'approval_request',
+      entityId: requestId,
+      description: `Approval request ${approvalNumber} created in Draft status.`,
+      ipAddress: null
+    });
+
+    return { id: requestId, approval_number: approvalNumber, status: 'Draft' };
+  } catch (error) {
+    await conn.rollback();
+    conn.release();
+    throw error;
+  }
+};
+
+/**
+ * Fetch all approval requests with filtering, pagination, and sorting.
+ */
+export const getApprovalRequests = async (query = {}, user) => {
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  const limit = Math.max(parseInt(query.limit, 10) || 10, 1);
+  const offset = (page - 1) * limit;
+
+  const conditions = [];
+  const params = [];
+
+  // Scoping logic: Procurement Officers see their creations; Managers see their assignments; Admins see all.
+  if (user.role === 'officer') {
+    conditions.push('ar.requested_by = ?');
+    params.push(user.id);
+  } else if (user.role === 'manager') {
+    conditions.push('ar.assigned_to = ?');
+    params.push(user.id);
+  }
+
+  // Filters
+  if (query.status) {
+    conditions.push('ar.status = ?');
+    params.push(query.status);
+  }
+  if (query.search) {
+    conditions.push('(ar.approval_number LIKE ? OR r.title LIKE ? OR v.name LIKE ?)');
+    const term = `%${query.search}%`;
+    params.push(term, term, term);
+  }
+  if (query.start_date) {
+    conditions.push('ar.request_date >= ?');
+    params.push(query.start_date);
+  }
+  if (query.end_date) {
+    conditions.push('ar.request_date <= ?');
+    params.push(query.end_date);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  // Sort
+  let orderClause = 'ORDER BY ar.id DESC';
+  if (query.sort === 'date_asc') orderClause = 'ORDER BY ar.request_date ASC';
+  else if (query.sort === 'date_desc') orderClause = 'ORDER BY ar.request_date DESC';
+  else if (query.sort === 'amount_asc') orderClause = 'ORDER BY q.grand_total ASC';
+  else if (query.sort === 'amount_desc') orderClause = 'ORDER BY q.grand_total DESC';
+
+  const [countRows] = await pool.execute(
+    `SELECT COUNT(*) AS total 
+     FROM approval_requests ar
+     JOIN rfqs r ON ar.rfq_id = r.id
+     JOIN vendors v ON ar.vendor_id = v.id
+     JOIN quotations q ON ar.quotation_id = q.id
+     ${where}`,
+    params
+  );
+
+  const [statsRows] = await pool.execute(
+    `SELECT 
+       COALESCE(SUM(CASE WHEN ar.status = 'Pending Approval' THEN 1 ELSE 0 END), 0) AS pending,
+       COALESCE(SUM(CASE WHEN ar.status = 'Approved' THEN 1 ELSE 0 END), 0) AS approved,
+       COALESCE(SUM(CASE WHEN ar.status = 'Rejected' THEN 1 ELSE 0 END), 0) AS rejected,
+       COUNT(*) AS total
+     FROM approval_requests ar
+     JOIN rfqs r ON ar.rfq_id = r.id
+     JOIN vendors v ON ar.vendor_id = v.id
+     JOIN quotations q ON ar.quotation_id = q.id
+     ${where}`,
+    params
+  );
+
+  const [rows] = await pool.query(
+    `SELECT 
+       ar.*,
+       r.rfq_number,
+       r.title AS rfq_title,
+       r.status AS rfq_status,
+       v.name AS vendor_name,
+       v.status AS vendor_status,
+       q.quotation_number,
+       q.grand_total,
+       q.delivery_days,
+       req.name AS requester_name,
+       appr.name AS approver_name
+     FROM approval_requests ar
+     JOIN rfqs r ON ar.rfq_id = r.id
+     JOIN vendors v ON ar.vendor_id = v.id
+     JOIN quotations q ON ar.quotation_id = q.id
+     JOIN users req ON ar.requested_by = req.id
+     JOIN users appr ON ar.assigned_to = appr.id
+     ${where}
+     ${orderClause}
+     LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
+  );
+
+  const total = countRows[0].total;
+
+  return {
+    data: rows,
+    stats: statsRows[0] || { pending: 0, approved: 0, rejected: 0, total: 0 },
+    pagination: {
+      page,
+      limit,
+      total,
+      total_pages: Math.ceil(total / limit)
+    }
   };
-  
-  return approval;
 };
 
 /**
- * Approves a pending request, auto-generates a PO, updates database, and triggers email notifications.
+ * Fetch a single approval request details and trace "Viewed" actions.
  */
-export const approveRequest = async (id, remarks, userId, userName) => {
+export const getApprovalRequestById = async (id, user) => {
+  const [rows] = await pool.execute(
+    `SELECT 
+       ar.*,
+       r.rfq_number,
+       r.title AS rfq_title,
+       r.description AS rfq_description,
+       (SELECT COALESCE(SUM(quantity), 0) FROM rfq_items WHERE rfq_id = r.id) AS rfq_quantity,
+       r.submission_deadline AS rfq_deadline,
+       v.name AS vendor_name,
+       v.email AS vendor_email,
+       v.phone AS vendor_phone,
+       v.address_line1 AS vendor_address,
+       v.status AS vendor_status,
+       q.quotation_number,
+       q.subtotal,
+       q.tax_amount,
+       q.discount_amount,
+       q.grand_total,
+       q.delivery_days,
+       q.notes AS vendor_notes,
+       req.name AS requester_name,
+       req.role AS requester_role,
+       appr.name AS approver_name,
+       appr.role AS approver_role
+     FROM approval_requests ar
+     JOIN rfqs r ON ar.rfq_id = r.id
+     JOIN vendors v ON ar.vendor_id = v.id
+     JOIN quotations q ON ar.quotation_id = q.id
+     JOIN users req ON ar.requested_by = req.id
+     JOIN users appr ON ar.assigned_to = appr.id
+     WHERE ar.id = ?`,
+    [id]
+  );
+
+  if (rows.length === 0) {
+    const error = new Error('Approval request not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const request = rows[0];
+
+  // Scoping check
+  if (user.role === 'officer' && request.requested_by !== user.id) {
+    const error = new Error('Access Denied. You cannot view this approval request.');
+    error.statusCode = 403;
+    throw error;
+  }
+  if (user.role === 'manager' && request.assigned_to !== user.id) {
+    const error = new Error('Access Denied. This approval request is not assigned to you.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // Insert "Viewed" history log if viewed by assigned approver for the first time
+  if (user.id === request.assigned_to) {
+    const [viewHistory] = await pool.execute(
+      `SELECT id FROM approval_history WHERE approval_request_id = ? AND action_type = 'Viewed' AND action_by = ?`,
+      [id, user.id]
+    );
+    if (viewHistory.length === 0) {
+      await pool.execute(
+        `INSERT INTO approval_history (approval_request_id, action_type, action_by, remarks) VALUES (?, 'Viewed', ?, 'Review initialized by approver.')`,
+        [id, user.id]
+      );
+    }
+  }
+
+  return request;
+};
+
+/**
+ * Update a Draft approval request
+ */
+export const updateApprovalRequest = async (id, payload, requesterId) => {
+  const { assigned_to, selection_reason, remarks } = payload;
+
+  const [rows] = await pool.execute(
+    `SELECT * FROM approval_requests WHERE id = ?`,
+    [id]
+  );
+  if (rows.length === 0) {
+    const error = new Error('Approval request not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const request = rows[0];
+
+  if (request.requested_by !== requesterId) {
+    const error = new Error('Only the creator of the approval request can modify it.');
+    error.statusCode = 403;
+    throw error;
+  }
+  if (request.status !== 'Draft') {
+    const error = new Error('Only approval requests in Draft status can be updated.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Verify new approver exists if changed
+  if (assigned_to && assigned_to !== request.assigned_to) {
+    const [userRows] = await pool.execute(
+      `SELECT id FROM users WHERE id = ? AND role IN ('manager', 'admin')`,
+      [assigned_to]
+    );
+    if (userRows.length === 0) {
+      const error = new Error('Assigned approver must exist and have Manager/Admin role.');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  const updates = [];
+  const params = [];
+
+  if (assigned_to) {
+    updates.push('assigned_to = ?');
+    params.push(assigned_to);
+  }
+  if (selection_reason) {
+    updates.push('selection_reason = ?');
+    params.push(selection_reason.trim());
+  }
+  if (remarks !== undefined) {
+    updates.push('remarks = ?');
+    params.push(remarks ? remarks.trim() : null);
+  }
+
+  if (updates.length > 0) {
+    params.push(id);
+    await pool.execute(
+      `UPDATE approval_requests SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+  }
+
+  return { id };
+};
+
+/**
+ * Submit an approval request (status transitions: Draft -> Pending Approval)
+ */
+export const submitApprovalRequest = async (id, requesterId) => {
+  const [rows] = await pool.execute(
+    `SELECT * FROM approval_requests WHERE id = ?`,
+    [id]
+  );
+  if (rows.length === 0) {
+    const error = new Error('Approval request not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const request = rows[0];
+
+  if (request.requested_by !== requesterId) {
+    const error = new Error('Only the creator can submit this request.');
+    error.statusCode = 403;
+    throw error;
+  }
+  if (request.status !== 'Draft') {
+    const error = new Error(`Request is already in ${request.status} status. Only Draft requests can be submitted.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
   const conn = await pool.getConnection();
   try {
-    // Retrieve the approval request details
-    const [approvalRows] = await conn.execute(
-      `SELECT a.*, q.total_price, q.vendor_id, r.title AS rfq_title, r.created_by AS rfq_creator_id,
-              v.name AS vendor_name, v.email AS vendor_email
-       FROM approvals a
-       JOIN quotations q ON a.quotation_id = q.id
-       JOIN rfqs r ON q.rfq_id = r.id
-       JOIN vendors v ON q.vendor_id = v.id
-       WHERE a.id = ?`,
+    await conn.beginTransaction();
+
+    await conn.execute(
+      `UPDATE approval_requests SET status = 'Pending Approval' WHERE id = ?`,
       [id]
     );
-    
-    if (approvalRows.length === 0) {
-      throw { statusCode: 404, message: 'Approval request not found.' };
-    }
-    
-    const approval = approvalRows[0];
-    
-    if (approval.decision !== 'pending') {
-      throw { statusCode: 400, message: `Approval request is already ${approval.decision}.` };
-    }
-    
-    // Resolve officer/requester details (who created the RFQ) to notify them
-    const [officerRows] = await conn.execute(
-      `SELECT name, email FROM users WHERE id = ?`,
-      [approval.rfq_creator_id]
-    );
-    
-    const officer = officerRows[0] || { name: 'Procurement Officer', email: null };
-    
-    // Start Transaction
-    await conn.beginTransaction();
-    
-    // Update approval details
-    await conn.execute(
-      `UPDATE approvals 
-       SET decision = 'approved', status = 'approved', remarks = ?, decided_at = CURRENT_TIMESTAMP, approver_id = ?
-       WHERE id = ?`,
-      [remarks || 'Approved', userId, id]
-    );
-    
-    // Generate sequential PO number
-    const poNumber = await generatePONumber(conn);
-    
-    // Compute financial breakdown (18% GST)
-    const subtotal = parseFloat(approval.total_price);
-    const taxAmount = subtotal * 0.18;
-    const grandTotal = subtotal + taxAmount;
-    
-    // Create Purchase Order record (incorporating requested fields)
-    const [poResult] = await conn.execute(
-      `INSERT INTO purchase_orders (po_number, approval_id, rfq_id, vendor_id, quotation_id, subtotal, tax_amount, grand_total, status, generated_by, generated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'generated', ?, CURRENT_TIMESTAMP)`,
-      [poNumber, id, approval.rfq_id, approval.vendor_id, approval.quotation_id, subtotal, taxAmount, grandTotal, userId]
-    );
-    
-    const poId = poResult.insertId;
-    
-    // Log activity
-    await logActivity(conn, userId, 'approval', id, 'APPROVAL_APPROVED');
-    await logActivity(conn, userId, 'purchase_order', poId, 'PO_GENERATED');
-    
+
+    await logHistory(conn, id, 'Submitted', requesterId, 'Approval request submitted to manager for review.');
+
     await conn.commit();
     conn.release();
-    
-    // Send email notifications asynchronously
-    const formattedAmount = new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR'
-    }).format(grandTotal);
-    
-    // 1. Email to Procurement Officer
-    if (officer.email) {
-      const officerSubject = 'Procurement Approved — VendorBridge';
-      const officerBody = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-          <h2 style="color: #10b981; border-bottom: 2px solid #10b981; padding-bottom: 10px; margin-top: 0;">Procurement Approved</h2>
-          <p>Dear ${officer.name},</p>
-          <p>The procurement request for <strong>${approval.rfq_title}</strong> has been approved by <strong>${userName}</strong>.</p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0; width: 35%;">Vendor:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0;">${approval.vendor_name}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Amount:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold; color: #111827;">${formattedAmount}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Purchase Order:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold; color: #0284c7;">${poNumber}</td>
-            </tr>
-          </table>
-          <p>Purchase Order <strong>${poNumber}</strong> has been generated automatically.</p>
-          <p>Please login to VendorBridge to view the purchase order and dispatch details.</p>
-          <p style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 12px; color: #64748b;">
-            Regards,<br><strong>VendorBridge Team</strong>
-          </p>
-        </div>
-      `;
-      sendEmail(officer.email, officerSubject, officerBody).catch(err => console.error(err));
-    }
-    
-    // 2. Email to Selected Vendor
-    if (approval.vendor_email) {
-      const vendorSubject = 'Purchase Order Generated — VendorBridge';
-      const vendorBody = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-          <h2 style="color: #0284c7; border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-top: 0;">Purchase Order Generated</h2>
-          <p>Dear ${approval.vendor_name},</p>
-          <p>Your quotation for <strong>${approval.rfq_title}</strong> has been approved.</p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0; width: 35%;">Purchase Order:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold; color: #0284c7;">${poNumber}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0;">Total Amount:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0; font-weight: bold; color: #111827;">${formattedAmount} <span style="font-weight: normal; font-size: 12px; color: #64748b;">(incl. 18% GST)</span></td>
-            </tr>
-          </table>
-          <p>Our procurement team will be in touch shortly regarding delivery coordination.</p>
-          <p>You can track the PO status through your VendorBridge portal.</p>
-          <p style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 12px; color: #64748b;">
-            Regards,<br><strong>VendorBridge Team</strong>
-          </p>
-        </div>
-      `;
-      sendEmail(approval.vendor_email, vendorSubject, vendorBody).catch(err => console.error(err));
-    }
-    
-    return {
-      approval_id: id,
-      decision: 'approved',
-      status: 'approved',
-      purchase_order: {
-        id: poId,
-        po_number: poNumber,
-        subtotal: subtotal,
-        tax_amount: taxAmount,
-        grand_total: grandTotal,
-        status: 'generated'
-      }
-    };
+
+    // Trigger Notification
+    await logAndNotify(requesterId, {
+      action: 'APPROVAL_REQUESTED',
+      module: 'Approval Workflow',
+      entityType: 'approval_request',
+      entityId: id,
+      description: `Approval request ${request.approval_number} submitted to manager.`,
+      ipAddress: null
+    });
+
+    return { id, status: 'Pending Approval' };
   } catch (error) {
-    if (conn.connection && conn.connection._protocol && conn.connection._protocol._fatalError === null) {
-      await conn.rollback();
-    }
+    await conn.rollback();
     conn.release();
     throw error;
   }
 };
 
 /**
- * Rejects a pending request, reverts RFQ & quotations statuses, logs details, and triggers officer email.
+ * Approve a Pending Approval request (status transitions: Pending Approval -> Approved)
  */
-export const rejectRequest = async (id, remarks, userId, userName) => {
+export const approveApprovalRequest = async (id, remarks, approverId) => {
+  const [rows] = await pool.execute(
+    `SELECT * FROM approval_requests WHERE id = ?`,
+    [id]
+  );
+  if (rows.length === 0) {
+    const error = new Error('Approval request not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const request = rows[0];
+
+  if (request.status !== 'Pending Approval') {
+    const error = new Error(`Request is in ${request.status} status. Only Pending Approval requests can be approved.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Verify authority
+  const [approverRows] = await pool.execute('SELECT id, role, name FROM users WHERE id = ?', [approverId]);
+  const approver = approverRows[0];
+  if (request.assigned_to !== approverId && approver?.role !== 'admin') {
+    const error = new Error('Access Denied. You are not authorized to approve this request.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   const conn = await pool.getConnection();
   try {
-    // Retrieve the approval request details
-    const [approvalRows] = await conn.execute(
-      `SELECT a.*, q.rfq_id, r.title AS rfq_title, r.created_by AS rfq_creator_id,
-              v.name AS vendor_name
-       FROM approvals a
-       JOIN quotations q ON a.quotation_id = q.id
-       JOIN rfqs r ON q.rfq_id = r.id
-       JOIN vendors v ON q.vendor_id = v.id
-       WHERE a.id = ?`,
-      [id]
-    );
-    
-    if (approvalRows.length === 0) {
-      throw { statusCode: 404, message: 'Approval request not found.' };
-    }
-    
-    const approval = approvalRows[0];
-    const rfqId = approval.rfq_id;
-    
-    if (approval.decision !== 'pending') {
-      throw { statusCode: 400, message: `Approval request is already ${approval.decision}.` };
-    }
-    
-    // Resolve officer/requester details (who created the RFQ) to notify them
-    const [officerRows] = await conn.execute(
-      `SELECT name, email FROM users WHERE id = ?`,
-      [approval.rfq_creator_id]
-    );
-    
-    const officer = officerRows[0] || { name: 'Procurement Officer', email: null };
-    
-    // Start Transaction
     await conn.beginTransaction();
-    
-    // Update approval details
+
+    // 1. Transition approval request
     await conn.execute(
-      `UPDATE approvals 
-       SET decision = 'rejected', status = 'rejected', remarks = ?, decided_at = CURRENT_TIMESTAMP, approver_id = ?
+      `UPDATE approval_requests 
+       SET status = 'Approved', approved_at = CURRENT_TIMESTAMP, remarks = ? 
        WHERE id = ?`,
-      [remarks, userId, id]
+      [remarks ? remarks.trim() : 'Approved', id]
     );
-    
-    // Revert selected & rejected quotations of this RFQ back to 'submitted'
-    await conn.execute(
-      `UPDATE quotations 
-       SET status = 'submitted' 
-       WHERE rfq_id = ? AND status IN ('selected', 'rejected')`,
-      [rfqId]
-    );
-    
-    // Revert RFQ status back to 'open'
-    await conn.execute(
-      `UPDATE rfqs 
-       SET status = 'open' 
-       WHERE id = ?`,
-      [rfqId]
-    );
-    
-    // Log activity
-    await logActivity(conn, userId, 'approval', id, 'APPROVAL_REJECTED');
-    
+
+    // 2. Keep quotation status as 'selected' (it already is, no need to revert. Selected means approved once status is Approved)
+    // 3. Log history
+    await logHistory(conn, id, 'Approved', approverId, remarks ? remarks.trim() : 'Approved');
+
     await conn.commit();
     conn.release();
-    
-    // Send email notification to procurement officer asynchronously
-    if (officer.email) {
-      const officerSubject = 'Procurement Rejected — VendorBridge';
-      const officerBody = `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
-          <h2 style="color: #ef4444; border-bottom: 2px solid #ef4444; padding-bottom: 10px; margin-top: 0;">Procurement Request Rejected</h2>
-          <p>Dear ${officer.name},</p>
-          <p>The procurement request for <strong>${approval.rfq_title}</strong> has been rejected by <strong>${userName}</strong>.</p>
-          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0; width: 35%;">Vendor Selected:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0;">${approval.vendor_name}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px; background-color: #f8fafc; font-weight: bold; border: 1px solid #e2e8f0; color: #ef4444;">Reason for Rejection:</td>
-              <td style="padding: 8px; border: 1px solid #e2e8f0; font-style: italic;">${remarks}</td>
-            </tr>
-          </table>
-          <p>The RFQ status has been reset to <strong>Open</strong>, and quotations have been reset to <strong>Submitted</strong> to allow you to review and select a vendor again.</p>
-          <p>Please login to VendorBridge to review the RFQ comparison screen.</p>
-          <p style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 12px; color: #64748b;">
-            Regards,<br><strong>VendorBridge Team</strong>
-          </p>
-        </div>
-      `;
-      sendEmail(officer.email, officerSubject, officerBody).catch(err => console.error(err));
-    }
-    
-    return {
-      approval_id: id,
-      decision: 'rejected',
-      status: 'rejected',
-      remarks
-    };
+
+    // Trigger notification
+    await logAndNotify(approverId, {
+      action: 'APPROVAL_APPROVED',
+      module: 'Approval Workflow',
+      entityType: 'approval_request',
+      entityId: id,
+      description: `Approval request ${request.approval_number} was approved by ${approver?.name || 'Manager'}.`,
+      ipAddress: null
+    });
+
+    return { id, status: 'Approved' };
   } catch (error) {
-    if (conn.connection && conn.connection._protocol && conn.connection._protocol._fatalError === null) {
-      await conn.rollback();
-    }
+    await conn.rollback();
     conn.release();
     throw error;
   }
+};
+
+/**
+ * Reject a Pending Approval request (status transitions: Pending Approval -> Rejected)
+ */
+export const rejectApprovalRequest = async (id, remarks, approverId) => {
+  if (!remarks || !remarks.trim()) {
+    const error = new Error('Remarks are mandatory when rejecting approval request.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [rows] = await pool.execute(
+    `SELECT * FROM approval_requests WHERE id = ?`,
+    [id]
+  );
+  if (rows.length === 0) {
+    const error = new Error('Approval request not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const request = rows[0];
+
+  if (request.status !== 'Pending Approval') {
+    const error = new Error(`Request is in ${request.status} status. Only Pending Approval requests can be rejected.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Verify authority
+  const [approverRows] = await pool.execute('SELECT id, role, name FROM users WHERE id = ?', [approverId]);
+  const approver = approverRows[0];
+  if (request.assigned_to !== approverId && approver?.role !== 'admin') {
+    const error = new Error('Access Denied. You are not authorized to reject this request.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Transition approval request
+    await conn.execute(
+      `UPDATE approval_requests 
+       SET status = 'Rejected', rejected_at = CURRENT_TIMESTAMP, remarks = ? 
+       WHERE id = ?`,
+      [remarks.trim(), id]
+    );
+
+    // 2. Revert quotation back to 'submitted'
+    await conn.execute(
+      `UPDATE quotations SET status = 'submitted' WHERE id = ?`,
+      [request.quotation_id]
+    );
+
+    // 3. Revert RFQ back to 'open' (published) status to allow select re-evaluations
+    await conn.execute(
+      `UPDATE rfqs SET status = 'open' WHERE id = ?`,
+      [request.rfq_id]
+    );
+
+    // 4. Log history
+    await logHistory(conn, id, 'Rejected', approverId, remarks.trim());
+
+    await conn.commit();
+    conn.release();
+
+    // Trigger notification
+    await logAndNotify(approverId, {
+      action: 'APPROVAL_REJECTED',
+      module: 'Approval Workflow',
+      entityType: 'approval_request',
+      entityId: id,
+      description: `Approval request ${request.approval_number} was rejected by ${approver?.name || 'Manager'}. Reason: ${remarks}`,
+      ipAddress: null
+    });
+
+    return { id, status: 'Rejected' };
+  } catch (error) {
+    await conn.rollback();
+    conn.release();
+    throw error;
+  }
+};
+
+/**
+ * Cancel an approval request (status transitions: Draft/Pending Approval -> Cancelled)
+ */
+export const cancelApprovalRequest = async (id, requesterId) => {
+  const [rows] = await pool.execute(
+    `SELECT * FROM approval_requests WHERE id = ?`,
+    [id]
+  );
+  if (rows.length === 0) {
+    const error = new Error('Approval request not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const request = rows[0];
+
+  if (request.requested_by !== requesterId) {
+    const error = new Error('Only the creator can cancel this approval request.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const invalidStatuses = ['Approved', 'Rejected', 'Cancelled'];
+  if (invalidStatuses.includes(request.status)) {
+    const error = new Error(`Request is already in ${request.status} status and cannot be cancelled.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Transition status
+    await conn.execute(
+      `UPDATE approval_requests SET status = 'Cancelled' WHERE id = ?`,
+      [id]
+    );
+
+    // 2. Revert quotation back to 'submitted'
+    await conn.execute(
+      `UPDATE quotations SET status = 'submitted' WHERE id = ?`,
+      [request.quotation_id]
+    );
+
+    // 3. Revert RFQ back to 'open' status
+    await conn.execute(
+      `UPDATE rfqs SET status = 'open' WHERE id = ?`,
+      [request.rfq_id]
+    );
+
+    // 4. Log history
+    await logHistory(conn, id, 'Cancelled', requesterId, 'Approval request cancelled by creator.');
+
+    await conn.commit();
+    conn.release();
+
+    return { id, status: 'Cancelled' };
+  } catch (error) {
+    await conn.rollback();
+    conn.release();
+    throw error;
+  }
+};
+
+/**
+ * Fetch chronological history timeline logs.
+ */
+export const getApprovalRequestHistory = async (requestId) => {
+  const [rows] = await pool.execute(
+    `SELECT 
+       ah.*,
+       u.name AS user_name,
+       u.role AS user_role
+     FROM approval_history ah
+     JOIN users u ON ah.action_by = u.id
+     WHERE ah.approval_request_id = ?
+     ORDER BY ah.id ASC`,
+    [requestId]
+  );
+  return rows;
 };

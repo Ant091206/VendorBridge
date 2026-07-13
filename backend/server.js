@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
-// Route imports
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import vendorRoutes from './routes/vendors.js';
@@ -17,35 +16,39 @@ import purchaseOrderRoutes from './routes/purchaseOrders.js';
 import invoiceRoutes from './routes/invoices.js';
 import activityLogRoutes from './routes/activityLogs.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
-import activityRoutes from './routes/activityRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import reportRoutesNew from './routes/reportRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
-
-// Middleware imports
 import notFound from './middleware/notFound.js';
 import errorHandler from './middleware/errorHandler.js';
 
-// Load environment variables from .env
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ── Security Headers (Helmet) ──
 app.use(helmet());
 
-// ── CORS Configuration ──
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174'
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS policy: origin '${origin}' not allowed`));
+  },
   credentials: true
 }));
 
-// ── Rate Limiting ──
-// General API rate limit: 100 requests per 15 minutes per IP
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -54,10 +57,9 @@ const generalLimiter = rateLimit({
   }
 });
 
-// Stricter limit for auth routes: 10 requests per 15 minutes per IP
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -66,14 +68,10 @@ const authLimiter = rateLimit({
   }
 });
 
-// Apply general limiter to all API routes
 app.use('/api', generalLimiter);
-
-// ── Body Parsing (with size limits) ──
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ── Health Check Route ──
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -83,10 +81,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── Authentication Routes (with stricter rate limit) ──
 app.use('/api/auth', authLimiter, authRoutes);
 
-// ── Feature Routes ──
 app.use('/api', userRoutes);
 app.use('/api', vendorRoutes);
 app.use('/api', vendorCategoryRoutes);
@@ -98,19 +94,13 @@ app.use('/api', purchaseOrderRoutes);
 app.use('/api', invoiceRoutes);
 app.use('/api', activityLogRoutes);
 app.use('/api', dashboardRoutes);
-app.use('/api', activityRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api', reportRoutesNew);
 app.use('/api', analyticsRoutes);
 
-// ── 404 Handler (must come after all routes) ──
 app.use(notFound);
-
-// ── Global Error Handler (must come after notFound) ──
 app.use(errorHandler);
 
-// ── Start Server ──
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Server running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });

@@ -18,10 +18,10 @@ const ROLE_COLORS = {
 const MODULE_COLORS = {
   'Authentication': 'bg-slate-100 text-slate-700',
   'Vendor Management': 'bg-cyan-50 text-cyan-700',
-  'RFQ Management': 'bg-indigo-50 text-indigo-700',
+  'RFQ Management': 'bg-green-50 text-green-700',
   'Quotation Management': 'bg-teal-50 text-teal-700',
   'Approval Workflow': 'bg-emerald-50 text-emerald-700',
-  'Purchase Orders': 'bg-purple-50 text-purple-700',
+  'Purchase Orders': 'bg-green-50 text-purple-700',
   'Invoices': 'bg-pink-50 text-pink-700'
 };
 
@@ -64,7 +64,7 @@ const ActivityDetails = () => {
         )}
         <button
           onClick={() => navigate('/activity-logs')}
-          className="flex items-center gap-2 text-sm text-[#6D5DFC] font-bold"
+          className="flex items-center gap-2 text-sm text-[#22C55E] font-bold"
         >
           <ArrowLeft size={16} />
           <span>Back to logs</span>
@@ -99,6 +99,22 @@ const ActivityDetails = () => {
   };
 
   const entityPath = getEntityLink();
+  const resolvedAction = log.action_type || log.action || '';
+  const resolvedModule = log.module_name || log.module || '';
+
+  // Parse JSON values if stringified
+  const parseJsonValue = (val) => {
+    if (!val) return null;
+    if (typeof val === 'object') return val;
+    try {
+      return JSON.parse(val);
+    } catch (e) {
+      return val;
+    }
+  };
+
+  const parsedOldVal = parseJsonValue(log.old_value);
+  const parsedNewVal = parseJsonValue(log.new_value);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -117,16 +133,16 @@ const ActivityDetails = () => {
 
       <div className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5 overflow-hidden">
         {/* Banner */}
-        <div className="bg-gradient-to-r from-[#6D5DFC]/10 via-[#A855F7]/10 to-indigo-500/5 px-6 py-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#22C55E]/10 via-[#16A34A]/10 to-indigo-500/5 px-6 py-6 border-b border-slate-100 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Action Type</span>
-            <h3 className="text-md font-mono font-black text-indigo-600 uppercase mt-1">
-              {log.action.replace(/_/g, ' ')}
+            <h3 className="text-md font-mono font-black text-green-600 uppercase mt-1">
+              {resolvedAction.replace(/_/g, ' ')}
             </h3>
           </div>
 
-          <span className={`inline-flex rounded-xl px-3 py-1.5 text-xs font-black ${MODULE_COLORS[log.module] || 'bg-slate-100 text-slate-700'}`}>
-            {log.module}
+          <span className={`inline-flex rounded-xl px-3 py-1.5 text-xs font-black ${MODULE_COLORS[resolvedModule] || 'bg-slate-100 text-slate-700'}`}>
+            {resolvedModule}
           </span>
         </div>
 
@@ -217,7 +233,7 @@ const ActivityDetails = () => {
                       {entityPath && (
                         <Link 
                           to={entityPath}
-                          className="inline-flex items-center gap-1 text-[11px] font-black text-[#6D5DFC] hover:underline"
+                          className="inline-flex items-center gap-1 text-[11px] font-black text-[#22C55E] hover:underline"
                         >
                           <span>Open Record</span>
                           <ExternalLink size={10} />
@@ -229,8 +245,51 @@ const ActivityDetails = () => {
                   )}
                 </div>
               </div>
+
+              {/* Device / Browser Info */}
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-400 border border-slate-100">
+                  <Compass size={16} />
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase">Device / Browser</span>
+                  <span className="text-xs font-semibold text-slate-650 truncate max-w-xs block" title={log.device_info || 'Unknown'}>
+                    {log.device_info || 'Unknown / Not recorded'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Change Values Audit (Old vs New Values) */}
+          {(parsedOldVal || parsedNewVal) && (
+            <div className="pt-6">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-3">Audited Changes (Previous vs New Value)</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase mb-2">Previous State (old_value)</span>
+                  {parsedOldVal ? (
+                    <pre className="overflow-x-auto text-slate-600 max-h-60 whitespace-pre-wrap leading-relaxed">
+                      {JSON.stringify(parsedOldVal, null, 2)}
+                    </pre>
+                  ) : (
+                    <span className="text-slate-400 italic">No previous state recorded</span>
+                  )}
+                </div>
+                
+                <div className="rounded-2xl border border-indigo-150 bg-green-50/20 p-4 font-mono text-xs">
+                  <span className="block text-[10px] font-bold text-green-500 uppercase mb-2">Updated State (new_value)</span>
+                  {parsedNewVal ? (
+                    <pre className="overflow-x-auto text-indigo-950 max-h-60 whitespace-pre-wrap leading-relaxed">
+                      {JSON.stringify(parsedNewVal, null, 2)}
+                    </pre>
+                  ) : (
+                    <span className="text-slate-400 italic">No new state recorded</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

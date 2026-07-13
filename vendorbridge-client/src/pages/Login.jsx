@@ -49,12 +49,12 @@ const Login = () => {
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-950 px-4 py-12">
       {/* Background Ambient Decorative Lights */}
       <div className="absolute top-1/4 left-1/4 -z-10 h-72 w-72 rounded-full bg-cyan-500/20 blur-[100px] animate-pulse"></div>
-      <div className="absolute bottom-1/4 right-1/4 -z-10 h-80 w-80 rounded-full bg-indigo-500/20 blur-[120px] animate-pulse"></div>
+      <div className="absolute bottom-1/4 right-1/4 -z-10 h-80 w-80 rounded-full bg-green-500/20 blur-[120px] animate-pulse"></div>
 
       <div className="w-full max-w-md">
         {/* Logo and Brand Header */}
         <div className="mb-8 text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-indigo-600 shadow-lg shadow-indigo-500/30">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 to-indigo-600 shadow-lg shadow-green-500/30">
             <span className="text-2xl font-black text-white tracking-wider">VB</span>
           </div>
           <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">

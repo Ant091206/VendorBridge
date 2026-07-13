@@ -23,6 +23,7 @@ const Register = () => {
       await axiosInstance.post('/auth/register', {
         name: data.name,
         email: data.email,
+        phone: data.phone || undefined,
         password: data.password,
         role: data.role
       });

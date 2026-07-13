@@ -1,34 +1,104 @@
 import express from 'express';
 import { verifyToken, restrictTo } from '../middleware/authMiddleware.js';
-import { validate, rules } from '../middleware/validateRequest.js';
 import {
-  getAllPurchaseOrders,
-  getMyPurchaseOrders,
-  getPurchaseOrderById,
-  updatePOStatus
+  createPO,
+  getAllPOs,
+  getPOById,
+  updatePO,
+  deletePO,
+  issuePO,
+  cancelPO,
+  acknowledgePO,
+  updateStatusManual,
+  getHistoryTimeline
 } from '../controllers/purchaseOrderController.js';
 
 const router = express.Router();
 
-// GET /api/purchase-orders - Return all POs (officer, admin, and manager only)
-router.get('/purchase-orders', verifyToken, restrictTo('officer', 'admin', 'manager'), getAllPurchaseOrders);
+// ── Vendor Scoped Routes (Placed above parameter routes to prevent collision) ──
+router.get(
+  '/vendor/purchase-orders',
+  verifyToken,
+  restrictTo('vendor'),
+  getAllPOs
+);
 
-// GET /api/purchase-orders/vendor/my-orders - Return vendor-specific POs (vendor only)
-// Note: Placed above /purchase-orders/:id to prevent parameter collision
-router.get('/purchase-orders/vendor/my-orders', verifyToken, restrictTo('vendor'), getMyPurchaseOrders);
+router.get(
+  '/vendor/purchase-orders/:id',
+  verifyToken,
+  restrictTo('vendor'),
+  getPOById
+);
 
-// GET /api/purchase-orders/:id - Return details of a single PO (officer, admin, manager, or owner vendor)
-router.get('/purchase-orders/:id', verifyToken, getPurchaseOrderById);
+// ── Standard Purchase Order Routes ──
+router.post(
+  '/purchase-orders',
+  verifyToken,
+  restrictTo('officer', 'admin'),
+  createPO
+);
 
-// PUT /api/purchase-orders/:id/status - Update PO status (officer, admin, and manager only)
-router.put('/purchase-orders/:id/status', 
-  verifyToken, 
-  restrictTo('officer', 'admin', 'manager'), 
-  validate([
-    rules.required('status'),
-    rules.oneOf('status', ['sent', 'completed'])
-  ]),
-  updatePOStatus
+router.get(
+  '/purchase-orders',
+  verifyToken,
+  restrictTo('officer', 'admin', 'manager', 'finance'),
+  getAllPOs
+);
+
+router.get(
+  '/purchase-orders/:id',
+  verifyToken,
+  restrictTo('officer', 'admin', 'manager', 'finance', 'vendor'),
+  getPOById
+);
+
+router.put(
+  '/purchase-orders/:id',
+  verifyToken,
+  restrictTo('officer', 'admin'),
+  updatePO
+);
+
+router.delete(
+  '/purchase-orders/:id',
+  verifyToken,
+  restrictTo('officer', 'admin'),
+  deletePO
+);
+
+router.patch(
+  '/purchase-orders/:id/issue',
+  verifyToken,
+  restrictTo('officer', 'admin'),
+  issuePO
+);
+
+router.patch(
+  '/purchase-orders/:id/cancel',
+  verifyToken,
+  restrictTo('officer', 'admin'),
+  cancelPO
+);
+
+router.patch(
+  '/purchase-orders/:id/status',
+  verifyToken,
+  restrictTo('officer', 'admin'),
+  updateStatusManual
+);
+
+router.patch(
+  '/purchase-orders/:id/acknowledge',
+  verifyToken,
+  restrictTo('vendor'),
+  acknowledgePO
+);
+
+router.get(
+  '/purchase-orders/:id/history',
+  verifyToken,
+  restrictTo('officer', 'admin', 'manager', 'finance', 'vendor'),
+  getHistoryTimeline
 );
 
 export default router;

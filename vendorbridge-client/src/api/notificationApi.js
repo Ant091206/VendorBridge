@@ -4,6 +4,15 @@ import axiosInstance from './axios';
  * Notifications API Functions
  */
 
+export const createNotification = async (payload) => {
+  try {
+    const response = await axiosInstance.post('/notifications', payload);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to create notification.');
+  }
+};
+
 export const getNotifications = async (params) => {
   try {
     const response = await axiosInstance.get('/notifications', { params });
@@ -22,12 +31,39 @@ export const getUnreadCount = async () => {
   }
 };
 
+export const getNotificationById = async (id) => {
+  try {
+    const response = await axiosInstance.get(`/notifications/${id}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to retrieve notification.');
+  }
+};
+
 export const markAsRead = async (id) => {
   try {
-    const response = await axiosInstance.post(`/notifications/${id}/read`);
+    const response = await axiosInstance.patch(`/notifications/${id}/read`);
     return response.data;
   } catch (error) {
     throw error.response?.data || new Error('Failed to mark notification as read.');
+  }
+};
+
+export const archiveNotification = async (id) => {
+  try {
+    const response = await axiosInstance.patch(`/notifications/${id}/archive`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to archive notification.');
+  }
+};
+
+export const deleteNotification = async (id) => {
+  try {
+    const response = await axiosInstance.delete(`/notifications/${id}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error('Failed to delete notification.');
   }
 };
 

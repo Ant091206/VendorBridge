@@ -1,11 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, './.env') });
 
 const initDb = async () => {
   console.log('Initializing database from schema.sql...');
 
-  const schemaPath = path.resolve('../database/schema.sql');
+  const schemaPath = path.resolve(__dirname, '../database/schema.sql');
   if (!fs.existsSync(schemaPath)) {
     console.error(`Schema file not found at: ${schemaPath}`);
     process.exit(1);
@@ -27,9 +32,9 @@ const initDb = async () => {
   try {
     // Connect without specifying DB name first, since database might not exist yet
     const connection = await mysql.createConnection({
-      host: 'localhost',
-      user: 'root',
-      password: 'Code_Vivek_24',
+      host:     process.env.DB_HOST     || 'localhost',
+      user:     process.env.DB_USER     || 'root',
+      password: process.env.DB_PASSWORD || '',
       multipleStatements: true // Allow executing USE vendorbridge; CREATE TABLE...
     });
 

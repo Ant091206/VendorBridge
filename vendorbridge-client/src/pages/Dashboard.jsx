@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardByRole } from '../api/dashboardApi';
 import ActivityFeed from '../components/dashboard/ActivityFeed';
@@ -14,19 +14,20 @@ import RecentInvoices from '../components/dashboard/RecentInvoices';
 import RecentPOs from '../components/dashboard/RecentPOs';
 import RecentRFQs from '../components/dashboard/RecentRFQs';
 import StatCard from '../components/dashboard/StatCard';
+import StatusBadge from '../components/dashboard/StatusBadge';
 
-const tones = ['purple', 'cyan', 'violet', 'slate'];
-
+// ── Admin: System Summary panel ──
 const SummaryGrid = ({ summary }) => {
   if (!summary) return null;
-
   return (
     <Panel title="System Summary">
       <div className="grid gap-3 sm:grid-cols-2">
         {Object.entries(summary).map(([key, value]) => (
-          <div key={key} className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-bold capitalize text-slate-500">{key.replaceAll('_', ' ')}</p>
-            <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
+          <div key={key} className="rounded-lg bg-[#F9FAFB] border border-[#F3F4F6] px-4 py-3">
+            <p className="text-xs text-[#9CA3AF] font-medium capitalize">
+              {key.replaceAll('_', ' ')}
+            </p>
+            <p className="mt-1.5 text-xl font-semibold text-[#111827]">{value}</p>
           </div>
         ))}
       </div>
@@ -34,19 +35,38 @@ const SummaryGrid = ({ summary }) => {
   );
 };
 
-const ApprovalQueue = ({ items = [] }) => (
-  <Panel title="Approval Queue" action={<Link className="text-xs font-bold text-[#6D5DFC]" to="/approvals">Open queue</Link>}>
+// ── Manager: Approval Queue panel ──
+const ApprovalQueuePanel = ({ items = [] }) => (
+  <Panel
+    title="Approval Queue"
+    action={
+      <Link
+        to="/approvals"
+        className="text-xs font-medium text-[#16A34A] hover:text-[#15803D] transition-colors"
+      >
+        Open queue →
+      </Link>
+    }
+  >
     {items.length === 0 ? (
-      <EmptyState title="No pending approvals" message="All procurement decisions are currently clear." />
+      <EmptyState title="All clear" message="No pending approvals at this time." />
     ) : (
-      <div className="space-y-3">
+      <div className="divide-y divide-[#F3F4F6] -mx-5 -mb-5">
         {items.map((item) => (
-          <Link key={item.id} to={`/approvals/${item.id}`} className="block rounded-2xl border border-slate-100 bg-slate-50 p-4 hover:border-[#6D5DFC]/30 hover:bg-white">
-            <div className="flex items-start justify-between gap-4">
-              <p className="min-w-0 truncate text-sm font-black text-slate-950">{item.rfq_title}</p>
-              <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black text-amber-700">Pending</span>
+          <Link
+            key={item.id}
+            to={`/approvals/${item.id}`}
+            className="flex items-center justify-between gap-4 px-5 py-3 hover:bg-[#F9FAFB] transition-colors group"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-[#111827] group-hover:text-[#16A34A] truncate transition-colors">
+                {item.rfq_title}
+              </p>
+              <p className="mt-0.5 text-xs text-[#9CA3AF]">
+                {item.vendor_name} · {item.delivery_days} days
+              </p>
             </div>
-            <p className="mt-2 text-xs font-medium text-slate-500">{item.vendor_name} · {item.delivery_days} days</p>
+            <StatusBadge status="pending" />
           </Link>
         ))}
       </div>
@@ -54,21 +74,20 @@ const ApprovalQueue = ({ items = [] }) => (
   </Panel>
 );
 
+// ── Manager: Recent Decisions panel ──
 const RecentDecisions = ({ items = [] }) => (
-  <Panel title="Recent Approval Decisions">
+  <Panel title="Recent Decisions">
     {items.length === 0 ? (
       <EmptyState title="No decisions yet" />
     ) : (
-      <div className="space-y-3">
+      <div className="divide-y divide-[#F3F4F6] -mx-5 -mb-5">
         {items.map((item) => (
-          <div key={item.id} className="rounded-2xl bg-slate-50 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-sm font-black text-slate-950">{item.rfq_title}</p>
-              <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-black capitalize ${item.decision === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                {item.decision}
-              </span>
+          <div key={item.id} className="flex items-center justify-between gap-4 px-5 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-[#111827] truncate">{item.rfq_title}</p>
+              <p className="mt-0.5 text-xs text-[#9CA3AF]">{item.vendor_name}</p>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{item.vendor_name}</p>
+            <StatusBadge status={item.decision} />
           </div>
         ))}
       </div>
@@ -76,18 +95,23 @@ const RecentDecisions = ({ items = [] }) => (
   </Panel>
 );
 
+// ── Vendor: Quotation Timeline ──
 const QuotationTimeline = ({ items = [] }) => (
-  <Panel title="Quotation Status Timeline">
+  <Panel title="Quotation Status">
     {items.length === 0 ? (
       <EmptyState title="No quotations submitted" />
     ) : (
-      <div className="space-y-3">
-        {items.map((item, index) => (
-          <div key={item.status} className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black text-white" style={{ backgroundColor: ['#6D5DFC', '#A855F7', '#22D3EE', '#14B8A6'][index % 4] }}>
-              {item.count}
-            </span>
-            <p className="text-sm font-black capitalize text-slate-900">{item.status}</p>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div
+            key={item.status}
+            className="flex items-center justify-between gap-3 rounded-lg bg-[#F9FAFB] border border-[#F3F4F6] px-4 py-3"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-semibold text-[#111827]">{item.count}</span>
+              <p className="text-sm text-[#374151] capitalize">{item.status}</p>
+            </div>
+            <StatusBadge status={item.status} />
           </div>
         ))}
       </div>
@@ -95,6 +119,7 @@ const QuotationTimeline = ({ items = [] }) => (
   </Panel>
 );
 
+// ── Main Dashboard ──
 const Dashboard = () => {
   const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
@@ -105,7 +130,6 @@ const Dashboard = () => {
 
   useEffect(() => {
     let alive = true;
-
     const load = async () => {
       setLoading(true);
       setError('');
@@ -118,11 +142,8 @@ const Dashboard = () => {
         if (alive) setLoading(false);
       }
     };
-
     load();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [role]);
 
   const kpis = useMemo(() => dashboard?.kpis || [], [dashboard]);
@@ -130,76 +151,113 @@ const Dashboard = () => {
   if (loading) return <DashboardSkeleton />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <DashboardHeader user={user} role={role} />
 
+      {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-3 rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-bold text-rose-700">
-          <AlertCircle size={18} />
+        <div className="flex items-center gap-3 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#DC2626]">
+          <AlertCircle size={16} className="shrink-0" />
           {error}
         </div>
       )}
 
+      {/* Vendor profile missing warning */}
       {dashboard?.vendorProfileMissing && (
-        <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
-          Your vendor portal account is active, but no vendor master record is linked to this email yet.
+        <div className="flex items-center gap-3 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] px-4 py-3 text-sm text-[#B45309]">
+          <AlertTriangle size={16} className="shrink-0" />
+          Your vendor portal is active, but no vendor record is linked to this email yet.
         </div>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi, index) => (
-          <StatCard key={kpi.key} title={kpi.label} value={kpi.value} format={kpi.format} suffix={kpi.suffix} tone={tones[index % tones.length]} />
-        ))}
-      </div>
+      {/* KPI Cards */}
+      {kpis.length > 0 && (
+        <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${kpis.length >= 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
+          {kpis.map((kpi) => (
+            <StatCard
+              key={kpi.key}
+              title={kpi.label}
+              value={kpi.value}
+              format={kpi.format}
+              suffix={kpi.suffix}
+              kpiKey={kpi.key}
+            />
+          ))}
+        </div>
+      )}
 
+      {/* ── Admin Layout ── */}
       {role === 'admin' && (
-        <div className="grid gap-6 xl:grid-cols-3">
-          <div className="space-y-6 xl:col-span-2">
-            <RecentRFQs items={dashboard?.recentRFQs} />
-            <RecentPOs items={dashboard?.recentPOs} />
-            <RecentInvoices items={dashboard?.recentInvoices} />
+        <>
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="space-y-5 xl:col-span-2">
+              <RecentRFQs items={dashboard?.recentRFQs} />
+              <RecentPOs items={dashboard?.recentPOs} />
+              <RecentInvoices items={dashboard?.recentInvoices} />
+            </div>
+            <div className="space-y-5">
+              <ActivityFeed items={dashboard?.recentActivity} />
+              <SummaryGrid summary={dashboard?.systemSummary} />
+            </div>
           </div>
-          <div className="space-y-6">
-            <ActivityFeed items={dashboard?.recentActivity} />
-            <SummaryGrid summary={dashboard?.systemSummary} />
-          </div>
-        </div>
+          <DashboardCharts charts={dashboard?.charts} />
+        </>
       )}
 
+      {/* ── Officer Layout ── */}
       {role === 'officer' && (
-        <div className="grid gap-6 xl:grid-cols-3">
-          <div className="space-y-6 xl:col-span-2">
-            <QuickActions actions={dashboard?.quickActions} />
-            <RecentRFQs items={dashboard?.recentRFQs} />
+        <>
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="space-y-5 xl:col-span-2">
+              <QuickActions actions={dashboard?.quickActions} />
+              <RecentRFQs items={dashboard?.recentRFQs} />
+            </div>
+            <div className="space-y-5">
+              <RecentPOs items={dashboard?.recentPOs} />
+              <RecentInvoices items={dashboard?.recentInvoices} />
+            </div>
           </div>
-          <div className="space-y-6">
-            <RecentPOs items={dashboard?.recentPOs} />
-            <RecentInvoices items={dashboard?.recentInvoices} />
-          </div>
-        </div>
+          <DashboardCharts charts={dashboard?.charts} />
+        </>
       )}
 
+      {/* ── Manager Layout ── */}
       {role === 'manager' && (
-        <div className="grid gap-6 xl:grid-cols-2">
-          <ApprovalQueue items={dashboard?.approvalQueue} />
+        <div className="grid gap-5 xl:grid-cols-2">
+          <ApprovalQueuePanel items={dashboard?.approvalQueue} />
           <RecentDecisions items={dashboard?.recentApprovalDecisions} />
         </div>
       )}
 
+      {/* ── Vendor Layout ── */}
       {role === 'vendor' && (
-        <div className="grid gap-6 xl:grid-cols-3">
-          <div className="space-y-6 xl:col-span-2">
+        <div className="grid gap-5 xl:grid-cols-3">
+          <div className="space-y-5 xl:col-span-2">
             <RecentRFQs items={dashboard?.recentRFQs} />
             <RecentPOs items={dashboard?.recentPOs} />
           </div>
-          <div className="space-y-6">
+          <div className="space-y-5">
             <QuotationTimeline items={dashboard?.quotationTimeline} />
             <RecentInvoices items={dashboard?.recentInvoices} />
           </div>
         </div>
       )}
 
-      <DashboardCharts charts={dashboard?.charts} />
+      {/* ── Finance Layout ── */}
+      {role === 'finance' && (
+        <>
+          <div className="grid gap-5 xl:grid-cols-3">
+            <div className="space-y-5 xl:col-span-2">
+              <QuickActions actions={dashboard?.quickActions} />
+              <RecentInvoices items={dashboard?.recentInvoices} />
+            </div>
+            <div className="space-y-5">
+              <RecentPOs items={dashboard?.recentPOs} />
+            </div>
+          </div>
+          <DashboardCharts charts={dashboard?.charts} />
+        </>
+      )}
     </div>
   );
 };

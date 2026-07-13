@@ -43,11 +43,11 @@ export const getMyActivity = async () => {
 };
 
 /**
- * Fetch all activity logs (Admin route, Module 9)
+ * Fetch all activity logs (Wrapper matching standard pages)
  */
 export const getAllActivity = async (params) => {
   try {
-    const response = await axiosInstance.get('/activity', { params });
+    const response = await axiosInstance.get('/activity-logs', { params });
     return response.data;
   } catch (error) {
     throw error.response?.data || new Error('Failed to retrieve activity logs.');
@@ -59,9 +59,21 @@ export const getAllActivity = async (params) => {
  */
 export const getActivityById = async (id) => {
   try {
-    const response = await axiosInstance.get(`/activity/${id}`);
+    const response = await axiosInstance.get(`/activity-logs/${id}`);
     return response.data;
   } catch (error) {
     throw error.response?.data || new Error('Failed to retrieve activity detail.');
+  }
+};
+
+/**
+ * Fetch logs for a specific module
+ */
+export const getLogsByModule = async (module, params) => {
+  try {
+    const response = await axiosInstance.get(`/activity-logs/module/${encodeURIComponent(module)}`, { params });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || new Error(`Failed to retrieve logs for module ${module}.`);
   }
 };

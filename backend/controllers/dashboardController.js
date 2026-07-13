@@ -2,7 +2,8 @@ import {
   getAdminDashboardData,
   getOfficerDashboardData,
   getManagerDashboardData,
-  getVendorDashboardData
+  getVendorDashboardData,
+  getFinanceDashboardData
 } from '../services/dashboardService.js';
 
 const sendDashboard = async (req, res, role, loader) => {
@@ -42,4 +43,8 @@ export const getManagerDashboard = (req, res) => {
 
 export const getVendorDashboard = (req, res) => {
   return sendDashboard(req, res, 'vendor', getVendorDashboardData);
+};
+
+export const getFinanceDashboard = (req, res) => {
+  return sendDashboard(req, res, 'finance', getFinanceDashboardData);
 };

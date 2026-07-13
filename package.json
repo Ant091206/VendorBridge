@@ -2,12 +2,21 @@
   "name": "vendorbridge-root",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "start": "npm run kill-ports && npm run dev",
+    "kill-ports": "powershell -Command \"Get-NetTCPConnection -LocalPort 5000,5173 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 500\"",
     "client": "cd vendorbridge-client && npm run dev",
     "server": "cd backend && npm start",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently --kill-others-on-fail --names \"BACKEND,FRONTEND\" --prefix-colors \"green,cyan\" \"npm run server\" \"npm run client\"",
     "install:all": "npm install && cd backend && npm install && cd ../vendorbridge-client && npm install",
-    "seed": "cd backend && node database/seed.js"
+    "seed": "node database/seed.js",
+    "seed:massive": "node backend/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "mysql2": "^3.9.7"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
